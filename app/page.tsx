@@ -9,7 +9,9 @@ import { getCurrentDateKey } from '@/lib/storage';
 import { useAuth } from '@/components/AuthProvider';
 import Link from 'next/link';
 
-export const dynamic = 'force-dynamic';
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+export const fetchCache = 'force-no-store'
 
 export default function Home() {
   const [currentDate, setCurrentDate] = useState('');

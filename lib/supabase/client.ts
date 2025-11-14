@@ -21,21 +21,27 @@ const mockClient = {
   removeChannel: () => {},
 }
 
+// Cache for the createBrowserClient function - only set in browser
 let createBrowserClientFn: any = null
 
 function getCreateBrowserClient() {
-  // During SSR/build, return mock client factory
+  // During SSR/build, NEVER try to load the real client
+  // Return mock client factory immediately
   if (typeof window === 'undefined') {
     return () => mockClient as any
   }
 
-  // Lazy load only in browser
+  // Only in browser: lazy load the real client
+  // Use a function reference that webpack can't analyze at build time
   if (!createBrowserClientFn) {
+    // Use Function constructor to prevent webpack from analyzing this
+    // This ensures require is never executed during build
+    const requireFunc = new Function('moduleName', 'return require(moduleName)')
     try {
-      // Use eval to prevent module-level execution during build
-      createBrowserClientFn = eval('require')('@supabase/ssr').createBrowserClient
+      const ssrModule = requireFunc('@supabase/ssr')
+      createBrowserClientFn = ssrModule.createBrowserClient
     } catch {
-      // Fallback to mock if require fails
+      // Fallback to mock if loading fails
       return () => mockClient as any
     }
   }
@@ -44,11 +50,13 @@ function getCreateBrowserClient() {
 }
 
 export function createClient() {
-  // During SSR/build, return mock client
+  // During SSR/build, return mock client immediately
+  // This check happens FIRST before any other code
   if (typeof window === 'undefined') {
     return mockClient as any
   }
 
+  // Only execute this in browser
   const createBrowserClient = getCreateBrowserClient()
   
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
