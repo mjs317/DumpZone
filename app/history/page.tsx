@@ -7,6 +7,8 @@ import ThemeToggle from '@/components/ThemeToggle';
 import { getHistory, DumpEntry, togglePinEntry, addTagsToEntry, removeTagFromEntry, getAllTags } from '@/lib/storage';
 import { exportEntryAsMarkdown, exportEntryAsText } from '@/lib/export';
 
+export const dynamic = 'force-dynamic';
+
 export default function HistoryPage() {
   const [entries, setEntries] = useState<DumpEntry[]>([]);
   const [editingTags, setEditingTags] = useState<string | null>(null);

@@ -7,6 +7,8 @@ import ThemeToggle from '@/components/ThemeToggle';
 import { getHistory, DumpEntry } from '@/lib/storage';
 import { searchInContent } from '@/lib/utils';
 
+export const dynamic = 'force-dynamic';
+
 export default function SearchPage() {
   const [query, setQuery] = useState('');
   const [entries, setEntries] = useState<DumpEntry[]>([]);

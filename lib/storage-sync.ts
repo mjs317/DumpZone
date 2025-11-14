@@ -3,12 +3,26 @@ import { syncService } from './sync'
 import * as localStorage from './storage'
 import { createClient } from '@/lib/supabase/client'
 
-const supabase = createClient()
+// Lazy initialization - only create client when needed (not during build)
+function getSupabaseClient() {
+  // Check if we're in a browser environment and env vars are set
+  if (typeof window === 'undefined') return null
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !key || url === 'https://placeholder.supabase.co') return null
+  return createClient()
+}
 
 // Check if user is authenticated
 async function isAuthenticated(): Promise<boolean> {
-  const { data: { user } } = await supabase.auth.getUser()
-  return !!user
+  const supabase = getSupabaseClient()
+  if (!supabase) return false
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    return !!user
+  } catch {
+    return false
+  }
 }
 
 // Hybrid storage functions that automatically use Supabase or localStorage

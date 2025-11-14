@@ -14,6 +14,8 @@ import { exportBackup, restoreFromFile } from '@/lib/backup';
 import { getHistory } from '@/lib/storage';
 import { exportAllAsMarkdown, exportAllAsText, exportAsJSON, exportAsPDF } from '@/lib/export';
 
+export const dynamic = 'force-dynamic';
+
 export default function SettingsPage() {
   const [notionToken, setNotionToken] = useState('');
   const [notionDatabaseId, setNotionDatabaseId] = useState('');

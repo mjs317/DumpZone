@@ -7,6 +7,8 @@ import ThemeToggle from '@/components/ThemeToggle';
 import { getHistory, getPinnedEntries } from '@/lib/storage';
 import { getWordCount, getCharacterCount } from '@/lib/utils';
 
+export const dynamic = 'force-dynamic';
+
 export default function StatsPage() {
   const [stats, setStats] = useState({
     totalDumps: 0,
