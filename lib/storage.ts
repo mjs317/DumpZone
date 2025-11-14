@@ -91,7 +91,7 @@ export function addTagsToEntry(entryId: string, tags: string[]): boolean {
   if (!entry) return false;
   
   const existingTags = entry.tags || [];
-  const newTags = [...new Set([...existingTags, ...tags])];
+  const newTags = Array.from(new Set([...existingTags, ...tags]));
   entry.tags = newTags;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
   return true;
