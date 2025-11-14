@@ -36,7 +36,7 @@ export class SyncService {
           table: 'current_day',
           filter: `user_id=eq.${userId}`,
         },
-        async (payload) => {
+        async (payload: any) => {
           if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
             const content = (payload.new as any)?.content || ''
             onUpdate(content)
@@ -90,7 +90,7 @@ export class SyncService {
     if (this.userIdCache) return this.userIdCache
     const supabase = getSupabaseClient()
     if (!supabase) return null
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } }: { data: { user: any } } = await supabase.auth.getUser()
     this.userIdCache = user?.id || null
     return this.userIdCache
   }

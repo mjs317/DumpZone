@@ -18,7 +18,7 @@ async function isAuthenticated(): Promise<boolean> {
   const supabase = getSupabaseClient()
   if (!supabase) return false
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } }: { data: { user: any } } = await supabase.auth.getUser()
     return !!user
   } catch {
     return false

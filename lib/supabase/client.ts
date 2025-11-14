@@ -21,14 +21,35 @@ const mockClient = {
   removeChannel: () => {},
 }
 
+let createBrowserClientFn: any = null
+
+function getCreateBrowserClient() {
+  // During SSR/build, return mock client factory
+  if (typeof window === 'undefined') {
+    return () => mockClient as any
+  }
+
+  // Lazy load only in browser
+  if (!createBrowserClientFn) {
+    try {
+      // Use eval to prevent module-level execution during build
+      createBrowserClientFn = eval('require')('@supabase/ssr').createBrowserClient
+    } catch {
+      // Fallback to mock if require fails
+      return () => mockClient as any
+    }
+  }
+
+  return createBrowserClientFn
+}
+
 export function createClient() {
   // During SSR/build, return mock client
   if (typeof window === 'undefined') {
     return mockClient as any
   }
 
-  // Dynamic import only in browser to prevent SSR issues
-  const { createBrowserClient } = require('@supabase/ssr')
+  const createBrowserClient = getCreateBrowserClient()
   
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
