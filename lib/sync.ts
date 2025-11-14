@@ -1,7 +1,11 @@
 import { createClient } from '@/lib/supabase/client'
 import { DumpEntry } from './storage'
 
-const supabase = createClient()
+// Lazy Supabase client - only create when needed (not during SSR/build)
+function getSupabaseClient() {
+  if (typeof window === 'undefined') return null
+  return createClient()
+}
 
 // Real-time sync service for cross-platform data
 export class SyncService {
@@ -11,6 +15,9 @@ export class SyncService {
 
   // Subscribe to real-time updates for current day content
   subscribeToCurrentDay(onUpdate: (content: string) => void) {
+    const supabase = getSupabaseClient()
+    if (!supabase) return
+    
     const userId = this.getUserId()
     if (!userId) return
 
@@ -44,6 +51,9 @@ export class SyncService {
 
   // Subscribe to real-time updates for history
   subscribeToHistory(onUpdate: (entries: DumpEntry[]) => void) {
+    const supabase = getSupabaseClient()
+    if (!supabase) return
+    
     const userId = this.getUserId()
     if (!userId) return
 
@@ -78,6 +88,8 @@ export class SyncService {
   
   private async getUserId(): Promise<string | null> {
     if (this.userIdCache) return this.userIdCache
+    const supabase = getSupabaseClient()
+    if (!supabase) return null
     const { data: { user } } = await supabase.auth.getUser()
     this.userIdCache = user?.id || null
     return this.userIdCache
@@ -90,6 +102,9 @@ export class SyncService {
 
   // Load current day content from Supabase
   async loadCurrentDay(): Promise<string> {
+    const supabase = getSupabaseClient()
+    if (!supabase) return ''
+    
     const userId = await this.getUserId()
     if (!userId) return ''
 
@@ -108,6 +123,9 @@ export class SyncService {
 
   // Save current day content to Supabase
   async saveCurrentDay(content: string): Promise<boolean> {
+    const supabase = getSupabaseClient()
+    if (!supabase) return false
+    
     const userId = await this.getUserId()
     if (!userId) return false
 
@@ -127,6 +145,9 @@ export class SyncService {
 
   // Load history from Supabase
   async loadHistory(): Promise<DumpEntry[]> {
+    const supabase = getSupabaseClient()
+    if (!supabase) return []
+    
     const userId = await this.getUserId()
     if (!userId) return []
 
@@ -149,6 +170,9 @@ export class SyncService {
 
   // Save entry to history
   async saveToHistory(entry: DumpEntry): Promise<boolean> {
+    const supabase = getSupabaseClient()
+    if (!supabase) return false
+    
     const userId = await this.getUserId()
     if (!userId) return false
 
@@ -169,6 +193,9 @@ export class SyncService {
 
   // Update entry
   async updateEntry(entryId: string, updates: Partial<DumpEntry>): Promise<boolean> {
+    const supabase = getSupabaseClient()
+    if (!supabase) return false
+    
     const userId = await this.getUserId()
     if (!userId) return false
 
@@ -183,6 +210,9 @@ export class SyncService {
 
   // Delete entry
   async deleteEntry(entryId: string): Promise<boolean> {
+    const supabase = getSupabaseClient()
+    if (!supabase) return false
+    
     const userId = await this.getUserId()
     if (!userId) return false
 
@@ -197,6 +227,9 @@ export class SyncService {
 
   // Clear current day
   async clearCurrentDay(): Promise<boolean> {
+    const supabase = getSupabaseClient()
+    if (!supabase) return false
+    
     const userId = await this.getUserId()
     if (!userId) return false
 
