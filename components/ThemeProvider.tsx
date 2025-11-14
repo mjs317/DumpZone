@@ -18,6 +18,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
     setMounted(true);
     const currentTheme = getTheme();
     setThemeState(currentTheme);
@@ -26,6 +28,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Listen for system theme changes
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = () => {
+      if (typeof window === 'undefined') return;
       if (!localStorage.getItem('dump-zone-theme')) {
         const newTheme = mediaQuery.matches ? 'dark' : 'light';
         setThemeState(newTheme);
