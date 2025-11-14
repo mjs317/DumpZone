@@ -7,8 +7,9 @@ export async function createClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  // During build time, if env vars aren't set, provide valid placeholder values
-  const finalUrl = url || 'https://placeholder.supabase.co'
+  // During build, if env vars aren't set, use Supabase demo values
+  // These are valid JWT tokens that pass Supabase validation but won't work for real requests
+  const finalUrl = url || 'https://demo.supabase.co'
   const finalKey = key || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
 
   return createServerClient(

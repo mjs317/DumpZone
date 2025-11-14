@@ -10,7 +10,7 @@ export async function updateSession(request: NextRequest) {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   // Skip Supabase if env vars aren't set (during build)
-  if (!url || !key || url === 'https://placeholder.supabase.co') {
+  if (!url || !key || url === 'https://demo.supabase.co') {
     return supabaseResponse
   }
 
