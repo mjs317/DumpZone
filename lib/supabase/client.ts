@@ -23,54 +23,100 @@ const mockClient = {
   removeChannel: () => {},
 }
 
-// Cache for the createBrowserClient function - only set in browser
-let createBrowserClientFn: any = null
+// Cache for the real Supabase client - only set in browser
+let realClient: any = null
+let clientPromise: Promise<any> | null = null
 
-function getCreateBrowserClient() {
-  // During SSR/build, NEVER try to load the real client
-  // Return mock client factory immediately
+async function getRealClient() {
+  // During SSR/build, return null
   if (typeof window === 'undefined') {
-    return () => mockClient as any
+    return null
   }
 
-  // Only in browser: lazy load the real client
-  if (!createBrowserClientFn) {
+  // If we already have the client, return it
+  if (realClient) {
+    return realClient
+  }
+
+  // If we're already loading, wait for it
+  if (clientPromise) {
+    return await clientPromise
+  }
+
+  // Start loading the real client
+  clientPromise = (async () => {
     try {
-      // Direct require - this is safe in browser runtime
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const ssrModule = require('@supabase/ssr')
-      createBrowserClientFn = ssrModule.createBrowserClient
+      const { createBrowserClient } = await import('@supabase/ssr')
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+      if (!url || !key || url === 'https://placeholder.supabase.co') {
+        realClient = createBrowserClient(
+          'https://demo.supabase.co',
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
+        )
+      } else {
+        realClient = createBrowserClient(url, key)
+      }
+      
+      clientPromise = null
+      return realClient
     } catch (err) {
       console.error('Failed to load Supabase client:', err)
-      // Fallback to mock if loading fails
-      return () => mockClient as any
+      clientPromise = null
+      return null
     }
-  }
+  })()
 
-  return createBrowserClientFn
+  return await clientPromise
 }
 
 export function createClient() {
   // During SSR/build, return mock client immediately
-  // This check happens FIRST before any other code
   if (typeof window === 'undefined') {
     return mockClient as any
   }
 
-  // Only execute this in browser
-  const createBrowserClient = getCreateBrowserClient()
-  
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  // During build, if env vars aren't set, use Supabase demo values
-  if (!url || !key || url === 'https://placeholder.supabase.co') {
-    return createBrowserClient(
-      'https://demo.supabase.co',
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
-    )
-  }
-
-  return createBrowserClient(url, key)
+  // In browser, return a proxy that loads the real client on first use
+  return new Proxy(mockClient, {
+    get(target, prop) {
+      // For auth methods, we need to load the real client
+      if (prop === 'auth') {
+        return new Proxy(target.auth, {
+          get(authTarget, authProp) {
+            const originalMethod = (authTarget as any)[authProp]
+            
+            // For async methods, return a function that loads the real client first
+            if (typeof originalMethod === 'function' && (authProp === 'signUp' || authProp === 'signInWithPassword' || authProp === 'getUser' || authProp === 'getSession')) {
+              return async (...args: any[]) => {
+                const client = await getRealClient()
+                if (!client) {
+                  return originalMethod.apply(authTarget, args)
+                }
+                return (client.auth as any)[authProp](...args)
+              }
+            }
+            
+            // For other auth properties, try to get from real client
+            return async (...args: any[]) => {
+              const client = await getRealClient()
+              if (!client) {
+                return typeof originalMethod === 'function' 
+                  ? originalMethod.apply(authTarget, args)
+                  : originalMethod
+              }
+              const realMethod = (client.auth as any)[authProp]
+              return typeof realMethod === 'function'
+                ? realMethod.apply(client.auth, args)
+                : realMethod
+            }
+          }
+        })
+      }
+      
+      // For other properties, return the mock for now
+      return (target as any)[prop]
+    }
+  }) as any
 }
 
