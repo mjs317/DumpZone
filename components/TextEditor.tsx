@@ -20,6 +20,9 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
   const undoStackRef = useRef<string[]>([]);
   const redoStackRef = useRef<string[]>([]);
   const maxUndoSteps = 50;
+  const isSpeechSupported =
+    typeof window !== 'undefined' &&
+    (('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window));
 
   const { user } = useAuth();
 
@@ -228,44 +231,45 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
 
   // Voice input (mobile)
   const handleVoiceInput = useCallback(() => {
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      
-      recognition.onresult = (event: any) => {
-        let transcript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
-        }
-        
-        if (editorRef.current) {
-          const selection = window.getSelection();
-          if (selection && selection.rangeCount > 0) {
-            const range = selection.getRangeAt(0);
-            range.deleteContents();
-            const textNode = document.createTextNode(transcript);
-            range.insertNode(textNode);
-            range.setStartAfter(textNode);
-            range.setEndAfter(textNode);
-            selection.removeAllRanges();
-            selection.addRange(range);
-          } else {
-            editorRef.current.textContent += transcript;
-          }
-          handleInput();
-        }
-      };
-      
-      recognition.start();
-    } else {
+    if (!isSpeechSupported) {
       alert('Voice input is not supported in your browser.');
+      return;
     }
-  }, [handleInput]);
+
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    
+    recognition.onresult = (event: any) => {
+      let transcript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      
+      if (editorRef.current) {
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          range.deleteContents();
+          const textNode = document.createTextNode(transcript);
+          range.insertNode(textNode);
+          range.setStartAfter(textNode);
+          range.setEndAfter(textNode);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        } else {
+          editorRef.current.textContent += transcript;
+        }
+        handleInput();
+      }
+    };
+    
+    recognition.start();
+  }, [handleInput, isSpeechSupported]);
 
   const handleClear = async () => {
-    const confirmed = window.confirm(
+    const confirmed = typeof window !== 'undefined' && window.confirm(
       'Are you sure you want to clear your entire dump? This cannot be undone.'
     );
     
@@ -610,7 +614,7 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
         </div>
 
         {/* Voice Input (mobile) */}
-        {('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) && (
+        {isSpeechSupported && (
           <>
             <div className="w-px h-6 sm:h-5 bg-gray-300 dark:bg-gray-600 mx-0.5 shrink-0" />
             <button
