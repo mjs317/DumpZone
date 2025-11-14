@@ -6,6 +6,11 @@ import { AuthProvider } from '@/components/AuthProvider'
 export const metadata: Metadata = {
   title: 'Dump Zone',
   description: 'A minimal brain dump app for your daily thoughts',
+  icons: {
+    icon: '/dumpster-logo.png',
+    shortcut: '/dumpster-logo.png',
+    apple: '/dumpster-logo.png',
+  },
 }
 
 export const viewport: Viewport = {

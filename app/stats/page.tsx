@@ -117,9 +117,13 @@ export default function StatsPage() {
   return (
     <main className="min-h-screen bg-white dark:bg-gray-900 w-full transition-colors">
       <div className="max-w-4xl mx-auto px-2 sm:px-4 md:px-6 lg:px-0 py-4 sm:py-6 md:py-8 w-full">
-        <div className="flex justify-between items-center mb-4">
-          <Logo />
-          <ThemeToggle />
+        <div className="flex justify-center items-center py-2 relative mb-4">
+          <Link href="/" aria-label="Return to Dump Zone" className="cursor-pointer">
+            <Logo />
+          </Link>
+          <div className="absolute right-0 flex items-center">
+            <ThemeToggle />
+          </div>
         </div>
         
         <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0">
