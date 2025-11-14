@@ -4,6 +4,8 @@ const mockClient = {
     getUser: async () => ({ data: { user: null } }),
     getSession: async () => ({ data: { session: null } }),
     signOut: async () => ({ error: null }),
+    signUp: async () => ({ data: { user: null, session: null }, error: { message: 'Not available during SSR' } }),
+    signInWithPassword: async () => ({ data: { user: null, session: null }, error: { message: 'Not available during SSR' } }),
     onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
   },
   from: () => ({
@@ -32,15 +34,14 @@ function getCreateBrowserClient() {
   }
 
   // Only in browser: lazy load the real client
-  // Use a function reference that webpack can't analyze at build time
   if (!createBrowserClientFn) {
-    // Use Function constructor to prevent webpack from analyzing this
-    // This ensures require is never executed during build
-    const requireFunc = new Function('moduleName', 'return require(moduleName)')
     try {
-      const ssrModule = requireFunc('@supabase/ssr')
+      // Direct require - this is safe in browser runtime
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const ssrModule = require('@supabase/ssr')
       createBrowserClientFn = ssrModule.createBrowserClient
-    } catch {
+    } catch (err) {
+      console.error('Failed to load Supabase client:', err)
       // Fallback to mock if loading fails
       return () => mockClient as any
     }
