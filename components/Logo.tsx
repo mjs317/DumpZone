@@ -94,12 +94,12 @@ export default function Logo() {
         />
       </div>
       
-      {/* Logo Text - "Dumpzone" */}
+      {/* Logo Text - "DumpZone" */}
       <h1 
         className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight transition-colors -mt-2 sm:-mt-3"
         style={{ color: colors.text }}
       >
-        Dumpzone
+        DumpZone
       </h1>
       
       {/* Tagline */}
