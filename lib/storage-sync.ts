@@ -79,7 +79,9 @@ export async function addTagsToEntry(entryId: string, tags: string[]): Promise<b
     const entry = entries.find(e => e.id === entryId)
     if (!entry) return false
     const existingTags = entry.tags || []
-    const newTags = Array.from(new Set([...existingTags, ...tags]))
+    const combinedTags = existingTags.concat(tags)
+    const uniqueTags = new Set<string>(combinedTags)
+    const newTags = Array.from(uniqueTags)
     return await syncService.updateEntry(entryId, { tags: newTags })
   }
   return localStorage.addTagsToEntry(entryId, tags)
