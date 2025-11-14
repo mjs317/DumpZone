@@ -10,10 +10,18 @@ import { useAuth } from '@/components/AuthProvider';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default function Home() {
-  const [currentDate, setCurrentDate] = useState(getCurrentDateKey());
+  const [currentDate, setCurrentDate] = useState('');
   const { user, signOut } = useAuth();
+
+  // Initialize date on client side only
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setCurrentDate(getCurrentDateKey());
+    }
+  }, []);
 
   useEffect(() => {
     // Initialize daily reset checker
