@@ -6,8 +6,6 @@ import { getWordCount, getCharacterCount } from '@/lib/utils';
 import { syncService } from '@/lib/sync';
 import { useAuth } from '@/components/AuthProvider';
 import { useTheme } from '@/components/ThemeProvider';
-import { getClientId } from '@/lib/client-id';
-
 interface TextEditorProps {
   onContentChange?: (content: string) => void;
   stickyOffset?: number;
@@ -30,9 +28,6 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
   const recognitionRef = useRef<any>(null);
   const lastLocalContentRef = useRef<string>('');
   const lastAppliedCommitRef = useRef<number | null>(null);
-  const pendingMutationsRef = useRef<Set<string>>(new Set());
-  const clientIdRef = useRef<string | null>(null);
-
   const { user } = useAuth();
 
   const getClosestChecklistItem = useCallback((node: Node | null): HTMLElement | null => {
@@ -56,12 +51,6 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
   }, []);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      clientIdRef.current = getClientId()
-    }
-  }, [])
-
-  useEffect(() => {
     // Load current day's content
     const loadContent = async () => {
       const savedContent = await getCurrentDayContent();
@@ -79,18 +68,8 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
 
     // Set up real-time sync if authenticated
     if (user) {
-      syncService.subscribeToCurrentDay(({ content: syncedContent, commitTimestamp, mutationId, clientId }) => {
+      syncService.subscribeToCurrentDay(({ content: syncedContent, commitTimestamp }) => {
         if (!editorRef.current) return;
-        if (clientId && clientIdRef.current && clientId === clientIdRef.current) {
-          if (mutationId) {
-            pendingMutationsRef.current.delete(mutationId);
-          }
-          return;
-        }
-        if (mutationId && pendingMutationsRef.current.has(mutationId)) {
-          pendingMutationsRef.current.delete(mutationId);
-          return;
-        }
         const commitMs = commitTimestamp ? new Date(commitTimestamp).getTime() : null;
         if (commitMs) {
           if (lastAppliedCommitRef.current && commitMs < lastAppliedCommitRef.current) {
@@ -99,13 +78,15 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
           lastAppliedCommitRef.current = commitMs;
         }
 
-        if (syncedContent !== editorRef.current.innerHTML) {
-          editorRef.current.innerHTML = syncedContent;
-          setContent(syncedContent);
-          updateCounts(syncedContent);
-          undoStackRef.current = [syncedContent];
-          lastLocalContentRef.current = syncedContent;
+        if (syncedContent === editorRef.current.innerHTML) {
+          return;
         }
+
+        editorRef.current.innerHTML = syncedContent;
+        setContent(syncedContent);
+        updateCounts(syncedContent);
+        undoStackRef.current = [syncedContent];
+        lastLocalContentRef.current = syncedContent;
       });
     }
 
@@ -140,10 +121,7 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
     // For realtime sync, save immediately
     setSaveStatus('saving');
     const save = async () => {
-      const result = await saveCurrentDayContent(newContent);
-      if (result?.mutationId) {
-        pendingMutationsRef.current.add(result.mutationId);
-      }
+      await saveCurrentDayContent(newContent);
       lastLocalContentRef.current = newContent;
       setSaveStatus('saved');
       if (onContentChange) {
@@ -272,10 +250,7 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
     editorRef.current.innerHTML = previousContent;
     setContent(previousContent);
     updateCounts(previousContent);
-    const result = await saveCurrentDayContent(previousContent);
-    if (result?.mutationId) {
-      pendingMutationsRef.current.add(result.mutationId);
-    }
+    await saveCurrentDayContent(previousContent);
     lastLocalContentRef.current = previousContent;
     setSaveStatus('saved');
     
@@ -298,10 +273,7 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
     editorRef.current.innerHTML = nextContent;
     setContent(nextContent);
     updateCounts(nextContent);
-    const result = await saveCurrentDayContent(nextContent);
-    if (result?.mutationId) {
-      pendingMutationsRef.current.add(result.mutationId);
-    }
+    await saveCurrentDayContent(nextContent);
     lastLocalContentRef.current = nextContent;
     setSaveStatus('saved');
     
@@ -462,10 +434,7 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
     if (confirmed && editorRef.current) {
       editorRef.current.innerHTML = '';
       setContent('');
-      const result = await saveCurrentDayContent('');
-      if (result?.mutationId) {
-        pendingMutationsRef.current.add(result.mutationId);
-      }
+      await saveCurrentDayContent('');
       lastLocalContentRef.current = '';
       updateCounts('');
       undoStackRef.current = [''];

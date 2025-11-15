@@ -64,13 +64,27 @@ export async function saveCurrentDayContent(
   try {
     const clientId = getClientId()
     const mutationId = createMutationId()
-    const result = await syncService.saveCurrentDay(content, { clientId, mutationId })
+    const response = await fetch('/api/current-day', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        content,
+        clientId,
+        mutationId,
+      }),
+    })
 
-    if (result) {
+    if (response.ok) {
+      const data = await response.json()
       return {
-        updatedAt: result.updatedAt,
-        mutationId: result.mutationId ?? mutationId,
+        updatedAt: data.updatedAt ?? null,
+        mutationId,
       }
+    } else if (response.status !== 401) {
+      const errorText = await response.text()
+      console.error('Failed to sync current day content:', errorText)
     }
   } catch (error) {
     console.error('Supabase save failed, falling back to local only:', error)
