@@ -1,3 +1,26 @@
+[contenteditable] .dz-checklist-item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  margin-bottom: 0.25rem;
+}
+
+[contenteditable] .dz-checkbox {
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.35rem;
+}
+
+[contenteditable] .dz-checklist-text {
+  flex: 1;
+  min-height: 1.5rem;
+}
+
+[contenteditable] .dz-checkbox:checked + .dz-checklist-text {
+  text-decoration: line-through;
+  opacity: 0.65;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

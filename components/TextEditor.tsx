@@ -90,6 +90,23 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     };
   }, [user]);
 
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const handleCheckboxChange = (event: Event) => {
+      const target = event.target as HTMLElement;
+      if (target && target.matches('.dz-checkbox')) {
+        handleInput();
+      }
+    };
+
+    editor.addEventListener('change', handleCheckboxChange);
+    return () => {
+      editor.removeEventListener('change', handleCheckboxChange);
+    };
+  }, [handleInput]);
+
   const updateCounts = (text: string) => {
     setWordCount(getWordCount(text));
     setCharCount(getCharacterCount(text));
@@ -369,6 +386,75 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     }
   };
 
+  const createChecklistItem = (text: string) => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'dz-checklist-item';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'dz-checkbox';
+    checkbox.setAttribute('contenteditable', 'false');
+
+    const textSpan = document.createElement('span');
+    textSpan.className = 'dz-checklist-text';
+    textSpan.setAttribute('contenteditable', 'true');
+    textSpan.textContent = text || '\u200B';
+
+    wrapper.appendChild(checkbox);
+    wrapper.appendChild(textSpan);
+    return { wrapper, textSpan };
+  };
+
+  const insertChecklist = () => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    const selection = window.getSelection();
+    if (!selection) return;
+
+    let range: Range;
+    if (selection.rangeCount > 0) {
+      range = selection.getRangeAt(0);
+    } else {
+      range = document.createRange();
+      range.selectNodeContents(editorRef.current);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    const fragment = range.cloneContents();
+    const selectedText = fragment.textContent?.trim() || '';
+    const lines =
+      selectedText.length > 0
+        ? selectedText.split(/\n+/).map(line => line.trim()).filter(Boolean)
+        : [''];
+
+    if (!range.collapsed) {
+      range.deleteContents();
+    }
+
+    const docFragment = document.createDocumentFragment();
+    let lastSpan: HTMLElement | null = null;
+
+    lines.forEach(line => {
+      const { wrapper, textSpan } = createChecklistItem(line);
+      docFragment.appendChild(wrapper);
+      lastSpan = textSpan;
+    });
+
+    range.insertNode(docFragment);
+
+    if (lastSpan) {
+      const newRange = document.createRange();
+      newRange.selectNodeContents(lastSpan);
+      newRange.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+    }
+
+    handleInput();
+  };
+
   const insertList = (ordered: boolean) => {
     if (!editorRef.current) return;
     
@@ -553,6 +639,8 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
       insertList(false);
     } else if (command === 'insertOrderedList') {
       insertList(true);
+    } else if (command === 'insertChecklist') {
+      insertChecklist();
     } else {
       formatText(command, value);
     }
@@ -670,6 +758,14 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
             title="Numbered List"
           >
             1.
+          </button>
+          <button
+            type="button"
+            onClick={(e) => handleButtonClick(e, 'insertChecklist')}
+            className="px-1.5 py-1.5 text-sm border rounded hover:bg-gray-200 active:bg-gray-300 dark:hover:bg-gray-700 dark:active:bg-gray-600 min-w-[32px] min-h-[32px] flex items-center justify-center shrink-0"
+            title="Checklist"
+          >
+            ☑
           </button>
         </div>
 
