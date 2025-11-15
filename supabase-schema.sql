@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS current_day (
   date DATE NOT NULL,
   content TEXT DEFAULT '',
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  client_id TEXT,
+  mutation_id TEXT,
   UNIQUE(user_id, date)
 );
 

@@ -16,7 +16,13 @@ export class SyncService {
 
   // Subscribe to real-time updates for current day content
   async subscribeToCurrentDay(
-    onUpdate: (payload: { content: string; updatedAt: string | null; commitTimestamp?: string | null }) => void
+    onUpdate: (payload: {
+      content: string
+      updatedAt: string | null
+      commitTimestamp?: string | null
+      mutationId?: string | null
+      clientId?: string | null
+    }) => void
   ) {
     const supabase = getSupabaseClient()
     if (!supabase) return
@@ -44,14 +50,18 @@ export class SyncService {
             const content = (payload.new as any)?.content || ''
             const updatedAt = (payload.new as any)?.updated_at || null
             const commitTimestamp = payload.commit_timestamp || null
-            onUpdate({ content, updatedAt, commitTimestamp })
+            const mutationId = (payload.new as any)?.mutation_id || null
+            const clientId = (payload.new as any)?.client_id || null
+            onUpdate({ content, updatedAt, commitTimestamp, mutationId, clientId })
           }
         }
       )
       .subscribe()
 
     // Load initial data
-    this.loadCurrentDayEntry().then(entry => onUpdate({ ...entry, commitTimestamp: null }))
+    this.loadCurrentDayEntry().then(entry =>
+      onUpdate({ ...entry, commitTimestamp: null, mutationId: null, clientId: null })
+    )
   }
 
   // Subscribe to real-time updates for history
@@ -147,7 +157,10 @@ export class SyncService {
   }
 
   // Save current day content to Supabase
-  async saveCurrentDay(content: string): Promise<string | null> {
+  async saveCurrentDay(
+    content: string,
+    metadata?: { clientId: string | null; mutationId: string | null }
+  ): Promise<{ updatedAt: string | null; mutationId: string | null } | null> {
     const supabase = getSupabaseClient()
     if (!supabase) return null
     
@@ -165,6 +178,8 @@ export class SyncService {
           date: dateKey,
           content,
           updated_at: updatedAt,
+          client_id: metadata?.clientId || null,
+          mutation_id: metadata?.mutationId || null,
         },
         { onConflict: 'user_id,date' }
       )
@@ -173,7 +188,7 @@ export class SyncService {
       console.error('Error saving current day to Supabase:', error)
       return null
     }
-    return updatedAt
+    return { updatedAt, mutationId: metadata?.mutationId || null }
   }
 
   // Load history from Supabase

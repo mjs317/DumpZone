@@ -2,6 +2,7 @@
 import { syncService } from './sync'
 import * as localStorage from './storage'
 import { createClient } from '@/lib/supabase/client'
+import { getClientId } from './client-id'
 
 // Lazy initialization - only create client when needed (not during build)
 function getSupabaseClient() {
@@ -48,10 +49,25 @@ export async function getCurrentDayContent(): Promise<string> {
   return localContent
 }
 
-export async function saveCurrentDayContent(content: string): Promise<string | null> {
+function createMutationId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID()
+  }
+  return `mutation-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+export async function saveCurrentDayContent(
+  content: string
+): Promise<{ updatedAt: string | null; mutationId: string | null } | null> {
   localStorage.saveCurrentDayContent(content)
   if (await isAuthenticated()) {
-    return await syncService.saveCurrentDay(content)
+    const clientId = getClientId()
+    const mutationId = createMutationId()
+    const result = await syncService.saveCurrentDay(content, { clientId, mutationId })
+    return {
+      updatedAt: result?.updatedAt ?? null,
+      mutationId: result?.mutationId ?? mutationId,
+    }
   }
   return null
 }
