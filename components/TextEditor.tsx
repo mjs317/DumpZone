@@ -90,23 +90,6 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     };
   }, [user]);
 
-  useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor) return;
-
-    const handleCheckboxChange = (event: Event) => {
-      const target = event.target as HTMLElement;
-      if (target && target.matches('.dz-checkbox')) {
-        handleInput();
-      }
-    };
-
-    editor.addEventListener('change', handleCheckboxChange);
-    return () => {
-      editor.removeEventListener('change', handleCheckboxChange);
-    };
-  }, [handleInput]);
-
   const updateCounts = (text: string) => {
     setWordCount(getWordCount(text));
     setCharCount(getCharacterCount(text));
@@ -144,6 +127,23 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     };
     save();
   }, [onContentChange]);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const handleCheckboxChange = (event: Event) => {
+      const target = event.target as HTMLElement;
+      if (target && target.matches('.dz-checkbox')) {
+        handleInput();
+      }
+    };
+
+    editor.addEventListener('change', handleCheckboxChange);
+    return () => {
+      editor.removeEventListener('change', handleCheckboxChange);
+    };
+  }, [handleInput]);
 
   const handleUndo = useCallback(async (e?: React.MouseEvent | KeyboardEvent) => {
     if (e) {
