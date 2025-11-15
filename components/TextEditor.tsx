@@ -485,25 +485,6 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     }
   };
 
-  const createChecklistItem = useCallback((text: string) => {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'dz-checklist-item';
-
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.className = 'dz-checkbox';
-    checkbox.setAttribute('contenteditable', 'false');
-
-    const textSpan = document.createElement('span');
-    textSpan.className = 'dz-checklist-text';
-    textSpan.setAttribute('contenteditable', 'true');
-    textSpan.textContent = text || '\u200B';
-
-    wrapper.appendChild(checkbox);
-    wrapper.appendChild(textSpan);
-    return { wrapper, textSpan };
-  }, []);
-
   const insertChecklist = () => {
     if (!editorRef.current) return;
     editorRef.current.focus();
@@ -553,25 +534,6 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
 
     handleInput();
   };
-
-  const exitChecklist = useCallback((currentItem: HTMLElement) => {
-    const parent = currentItem.parentNode;
-    const nextSibling = currentItem.nextSibling;
-    currentItem.remove();
-
-    const newLine = document.createElement('div');
-    const br = document.createElement('br');
-    newLine.appendChild(br);
-
-    if (parent) {
-      parent.insertBefore(newLine, nextSibling);
-    } else if (editorRef.current) {
-      editorRef.current.appendChild(newLine);
-    }
-
-    placeCaretAtEnd(newLine);
-    handleInput();
-  }, [handleInput, placeCaretAtEnd]);
 
   const insertList = (ordered: boolean) => {
     if (!editorRef.current) return;
