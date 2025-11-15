@@ -23,6 +23,8 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
   const isSpeechSupported =
     typeof window !== 'undefined' &&
     (('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window));
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
+  const colorPickerRef = useRef<HTMLDivElement>(null);
 
   const { user } = useAuth();
 
@@ -189,6 +191,17 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleUndo, handleRedo]);
 
+  useEffect(() => {
+    if (!colorPickerOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (colorPickerRef.current && !colorPickerRef.current.contains(event.target as Node)) {
+        setColorPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [colorPickerOpen]);
+
   // Image paste support
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = e.clipboardData.items;
@@ -239,13 +252,17 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
-    recognition.interimResults = true;
+    recognition.interimResults = false;
     
     recognition.onresult = (event: any) => {
       let transcript = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript;
+        const result = event.results[i];
+        if (result.isFinal) {
+          transcript += result[0].transcript;
+        }
       }
+      if (!transcript.trim()) return;
       
       if (editorRef.current) {
         const selection = window.getSelection();
@@ -263,6 +280,9 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
         }
         handleInput();
       }
+    };
+    recognition.onend = () => {
+      recognition.stop();
     };
     
     recognition.start();
@@ -426,6 +446,20 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     execCommand(format, value);
   };
 
+  const applyTextColor = (color: string) => {
+    formatText('foreColor', color);
+    setColorPickerOpen(false);
+  };
+
+  const colorOptions = [
+    { label: 'Black', value: '#000000', swatch: 'bg-gray-900' },
+    { label: 'Red', value: '#ef4444', swatch: 'bg-red-500' },
+    { label: 'Blue', value: '#3b82f6', swatch: 'bg-blue-500' },
+    { label: 'Green', value: '#10b981', swatch: 'bg-green-500' },
+    { label: 'Orange', value: '#f59e0b', swatch: 'bg-orange-500' },
+    { label: 'Purple', value: '#8b5cf6', swatch: 'bg-purple-500' },
+  ];
+
   const handleButtonClick = (e: React.MouseEvent, command: string, value?: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -442,7 +476,7 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
   return (
     <div className="flex flex-col h-full w-full">
       {/* Toolbar */}
-      <div className="flex flex-nowrap gap-1 p-1.5 sm:p-2 border-b bg-gray-50 dark:bg-gray-800 sticky top-0 z-10 overflow-x-auto w-full scrollbar-hide">
+      <div className="flex flex-wrap justify-center sm:justify-start gap-1.5 p-2 border-b bg-gray-50 dark:bg-gray-800 sticky top-0 z-10 w-full">
         {/* Undo/Redo */}
         <div className="flex gap-0.5 shrink-0">
           <button
@@ -480,55 +514,30 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
         <div className="w-px h-6 sm:h-5 bg-gray-300 dark:bg-gray-600 mx-0.5 shrink-0" />
 
         {/* Text Colors */}
-        <div className="flex gap-0.5 shrink-0">
+        <div className="relative shrink-0" ref={colorPickerRef}>
           <button
             type="button"
-            onClick={(e) => handleButtonClick(e, 'foreColor', '#000000')}
-            className="px-1.5 py-1.5 text-xs border rounded hover:bg-gray-200 active:bg-gray-300 dark:hover:bg-gray-700 dark:active:bg-gray-600 min-w-[32px] min-h-[32px] flex items-center justify-center shrink-0"
-            title="Black"
+            onClick={() => setColorPickerOpen((prev) => !prev)}
+            className="px-2 py-1.5 text-sm border rounded hover:bg-gray-200 active:bg-gray-300 dark:hover:bg-gray-700 dark:active:bg-gray-600 flex items-center justify-center min-w-[36px] min-h-[36px]"
+            title="Text color"
           >
-            <span className="text-black dark:text-white">A</span>
+            🎨
           </button>
-          <button
-            type="button"
-            onClick={(e) => handleButtonClick(e, 'foreColor', '#ef4444')}
-            className="px-1.5 py-1.5 text-xs border rounded hover:bg-gray-200 active:bg-gray-300 dark:hover:bg-gray-700 dark:active:bg-gray-600 min-w-[32px] min-h-[32px] flex items-center justify-center shrink-0"
-            title="Red"
-          >
-            <span className="text-red-500">A</span>
-          </button>
-          <button
-            type="button"
-            onClick={(e) => handleButtonClick(e, 'foreColor', '#3b82f6')}
-            className="px-1.5 py-1.5 text-xs border rounded hover:bg-gray-200 active:bg-gray-300 dark:hover:bg-gray-700 dark:active:bg-gray-600 min-w-[32px] min-h-[32px] flex items-center justify-center shrink-0"
-            title="Blue"
-          >
-            <span className="text-blue-500">A</span>
-          </button>
-          <button
-            type="button"
-            onClick={(e) => handleButtonClick(e, 'foreColor', '#10b981')}
-            className="px-1.5 py-1.5 text-xs border rounded hover:bg-gray-200 active:bg-gray-300 dark:hover:bg-gray-700 dark:active:bg-gray-600 min-w-[32px] min-h-[32px] flex items-center justify-center shrink-0"
-            title="Green"
-          >
-            <span className="text-green-500">A</span>
-          </button>
-          <button
-            type="button"
-            onClick={(e) => handleButtonClick(e, 'foreColor', '#f59e0b')}
-            className="px-1.5 py-1.5 text-xs border rounded hover:bg-gray-200 active:bg-gray-300 dark:hover:bg-gray-700 dark:active:bg-gray-600 min-w-[32px] min-h-[32px] flex items-center justify-center shrink-0"
-            title="Orange"
-          >
-            <span className="text-orange-500">A</span>
-          </button>
-          <button
-            type="button"
-            onClick={(e) => handleButtonClick(e, 'foreColor', '#8b5cf6')}
-            className="px-1.5 py-1.5 text-xs border rounded hover:bg-gray-200 active:bg-gray-300 dark:hover:bg-gray-700 dark:active:bg-gray-600 min-w-[32px] min-h-[32px] flex items-center justify-center shrink-0"
-            title="Purple"
-          >
-            <span className="text-purple-500">A</span>
-          </button>
+          {colorPickerOpen && (
+            <div className="absolute left-1/2 top-full mt-2 -translate-x-1/2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-2 grid grid-cols-3 gap-2 z-20 min-w-[140px]">
+              {colorOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => applyTextColor(option.value)}
+                  className="flex flex-col items-center gap-1 text-xs text-gray-600 dark:text-gray-300"
+                >
+                  <span className={`w-6 h-6 rounded-full ${option.swatch} border border-white shadow`} />
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="w-px h-6 sm:h-5 bg-gray-300 dark:bg-gray-600 mx-0.5 shrink-0" />
