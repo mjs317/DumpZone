@@ -163,7 +163,7 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     return () => {
       editor.removeEventListener('change', handleCheckboxChange);
     };
-  }, [handleInput, getClosestChecklistItem, createChecklistItem, exitChecklist, placeCaretAtEnd]);
+  }, [handleInput]);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -204,7 +204,7 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     return () => {
       editor.removeEventListener('keydown', handleChecklistKeys);
     };
-  }, [handleInput]);
+  }, [handleInput, getClosestChecklistItem, createChecklistItem, exitChecklist, placeCaretAtEnd]);
 
   const handleUndo = useCallback(async (e?: React.MouseEvent | KeyboardEvent) => {
     if (e) {
