@@ -143,9 +143,10 @@ export default function SettingsPage() {
           <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-gray-200">Settings</h2>
           <Link 
             href="/" 
-            className="text-xs sm:text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline touch-target"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all duration-200 hover:scale-105 active:scale-95 touch-target border border-blue-200 dark:border-blue-800"
           >
-            Back to Dump Zone
+            <span>⬅️</span>
+            <span>Back to Dump Zone</span>
           </Link>
         </div>
 

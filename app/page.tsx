@@ -44,7 +44,9 @@ export default function Home() {
     <main className="min-h-screen bg-white dark:bg-gray-900 w-full transition-colors">
       <div className="max-w-4xl mx-auto px-2 sm:px-4 md:px-6 lg:px-0 w-full">
         <div className="flex justify-center items-center py-2 relative">
-          <Logo />
+          <Link href="/" aria-label="Return home" className="cursor-pointer">
+            <Logo />
+          </Link>
           <div className="absolute right-0 flex items-center">
             <ThemeToggle />
           </div>

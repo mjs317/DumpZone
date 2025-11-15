@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Logo from '@/components/Logo'
+import ThemeToggle from '@/components/ThemeToggle'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,9 +59,17 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen bg-white dark:bg-gray-900 flex items-center justify-center px-4">
       <div className="max-w-md w-full">
+        <div className="flex justify-center items-center py-2 relative mb-6">
+          <Link href="/" aria-label="Return to Dump Zone" className="cursor-pointer">
+            <Logo />
+          </Link>
+          <div className="absolute right-0 flex items-center">
+            <ThemeToggle />
+          </div>
+        </div>
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-200 mb-2">
-            Welcome to Dumpzone
+            Welcome to DumpZone
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
             {isSignUp ? 'Create your account' : 'Sign in to sync across all your devices'}
