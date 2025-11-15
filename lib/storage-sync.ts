@@ -60,15 +60,22 @@ export async function saveCurrentDayContent(
   content: string
 ): Promise<{ updatedAt: string | null; mutationId: string | null } | null> {
   localStorage.saveCurrentDayContent(content)
-  if (await isAuthenticated()) {
+
+  try {
     const clientId = getClientId()
     const mutationId = createMutationId()
     const result = await syncService.saveCurrentDay(content, { clientId, mutationId })
-    return {
-      updatedAt: result?.updatedAt ?? null,
-      mutationId: result?.mutationId ?? mutationId,
+
+    if (result) {
+      return {
+        updatedAt: result.updatedAt,
+        mutationId: result.mutationId ?? mutationId,
+      }
     }
+  } catch (error) {
+    console.error('Supabase save failed, falling back to local only:', error)
   }
+
   return null
 }
 
