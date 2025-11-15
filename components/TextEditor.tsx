@@ -740,12 +740,15 @@ export default function TextEditor({ onContentChange, stickyOffset = 0 }: TextEd
     }
   };
 
+  const computedTop = Math.max(stickyOffset ?? 0, 0);
+  const editorMaxHeight = `calc(100vh - ${computedTop + 220}px)`;
+
   return (
     <div className="flex flex-col h-full w-full min-h-0">
       {/* Toolbar */}
       <div
         className="flex flex-wrap justify-center items-center gap-1.5 p-2 border-b bg-gray-50/95 dark:bg-gray-800/95 rounded-t-lg sticky z-30 backdrop-blur"
-        style={{ top: stickyOffset }}
+        style={{ top: computedTop }}
       >
         {/* Undo/Redo */}
         <div className="flex gap-0.5 shrink-0">
@@ -919,7 +922,10 @@ export default function TextEditor({ onContentChange, stickyOffset = 0 }: TextEd
         onInput={handleInput}
         onPaste={handlePaste}
         className="flex-1 p-3 sm:p-4 md:p-6 focus:outline-none overflow-y-auto text-base sm:text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200"
-        style={{ minHeight: '0' }}
+        style={{
+          minHeight: '360px',
+          maxHeight: editorMaxHeight,
+        }}
         suppressContentEditableWarning
         data-placeholder="Start dumping your thoughts..."
       />
