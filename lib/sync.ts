@@ -87,6 +87,14 @@ export class SyncService {
 
   // Get current user ID (cached)
   private userIdCache: string | null = null
+
+  setUserId(userId: string | null) {
+    this.userIdCache = userId
+  }
+
+  hasUser(): boolean {
+    return this.userIdCache !== null
+  }
   
   private async getUserId(): Promise<string | null> {
     if (this.userIdCache) return this.userIdCache

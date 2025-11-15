@@ -37,7 +37,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }: { data: { session: any } }) => {
-      setUser(session?.user ?? null)
+      const nextUser = session?.user ?? null
+      setUser(nextUser)
+      syncService.setUserId(nextUser?.id ?? null)
       setLoading(false)
     })
 
@@ -45,8 +47,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
-      setUser(session?.user ?? null)
-      syncService.clearCache() // Clear cache on auth change
+      const nextUser = session?.user ?? null
+      setUser(nextUser)
+      syncService.setUserId(nextUser?.id ?? null)
       if (session) {
         router.refresh()
       }
@@ -58,6 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     if (typeof window === 'undefined') return
     syncService.cleanup()
+    syncService.setUserId(null)
     syncService.clearCache()
     const supabase = createClient()
     await supabase.auth.signOut()

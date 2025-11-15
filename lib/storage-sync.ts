@@ -15,11 +15,20 @@ function getSupabaseClient() {
 
 // Check if user is authenticated
 async function isAuthenticated(): Promise<boolean> {
+  if (syncService.hasUser()) {
+    return true
+  }
   const supabase = getSupabaseClient()
   if (!supabase) return false
   try {
-    const { data: { user } }: { data: { user: any } } = await supabase.auth.getUser()
-    return !!user
+    const {
+      data: { user },
+    }: { data: { user: any } } = await supabase.auth.getUser()
+    if (user?.id) {
+      syncService.setUserId(user.id)
+      return true
+    }
+    return false
   } catch {
     return false
   }
