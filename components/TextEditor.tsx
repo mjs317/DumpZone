@@ -49,7 +49,11 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     if (user) {
       syncService.subscribeToCurrentDay(({ content: syncedContent, updatedAt }) => {
         if (!editorRef.current) return;
-        if (updatedAt && lastLocalSaveAtRef.current && updatedAt <= lastLocalSaveAtRef.current) {
+        if (
+          updatedAt &&
+          lastLocalSaveAtRef.current &&
+          new Date(updatedAt).getTime() < new Date(lastLocalSaveAtRef.current).getTime()
+        ) {
           return;
         }
         if (syncedContent !== editorRef.current.innerHTML) {
@@ -60,6 +64,9 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
             setContent(syncedContent);
             updateCounts(syncedContent);
             undoStackRef.current = [syncedContent];
+            if (updatedAt) {
+              lastLocalSaveAtRef.current = updatedAt;
+            }
           }
         }
       });
