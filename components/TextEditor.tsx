@@ -193,6 +193,12 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     const handleCheckboxChange = (event: Event) => {
       const target = event.target as HTMLElement;
       if (target && target.matches('.dz-checkbox')) {
+        const checkbox = target as HTMLInputElement;
+        if (checkbox.checked) {
+          checkbox.setAttribute('checked', 'checked');
+        } else {
+          checkbox.removeAttribute('checked');
+        }
         handleInput();
       }
     };
