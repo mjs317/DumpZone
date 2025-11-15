@@ -26,6 +26,7 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     (('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window));
   const { theme } = useTheme();
   const recognitionRef = useRef<any>(null);
+  const lastLocalSaveAtRef = useRef<string | null>(null);
 
   const { user } = useAuth();
 
@@ -46,8 +47,12 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
 
     // Set up real-time sync if authenticated
     if (user) {
-      syncService.subscribeToCurrentDay((syncedContent) => {
-        if (editorRef.current && syncedContent !== editorRef.current.innerHTML) {
+      syncService.subscribeToCurrentDay(({ content: syncedContent, updatedAt }) => {
+        if (!editorRef.current) return;
+        if (updatedAt && lastLocalSaveAtRef.current && updatedAt <= lastLocalSaveAtRef.current) {
+          return;
+        }
+        if (syncedContent !== editorRef.current.innerHTML) {
           // Only update if content is different to avoid conflicts
           const currentContent = editorRef.current.innerHTML;
           if (currentContent !== syncedContent) {
@@ -91,7 +96,10 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     // For realtime sync, save immediately
     setSaveStatus('saving');
     const save = async () => {
-      await saveCurrentDayContent(newContent);
+      const timestamp = await saveCurrentDayContent(newContent);
+      if (timestamp) {
+        lastLocalSaveAtRef.current = timestamp;
+      }
       setSaveStatus('saved');
       if (onContentChange) {
         onContentChange(newContent);

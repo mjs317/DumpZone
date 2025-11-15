@@ -15,7 +15,7 @@ export class SyncService {
   private listeners: Map<string, (data: any) => void> = new Map()
 
   // Subscribe to real-time updates for current day content
-  async subscribeToCurrentDay(onUpdate: (content: string) => void) {
+  async subscribeToCurrentDay(onUpdate: (payload: { content: string; updatedAt: string | null }) => void) {
     const supabase = getSupabaseClient()
     if (!supabase) return
     
@@ -40,14 +40,15 @@ export class SyncService {
         async (payload: any) => {
           if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
             const content = (payload.new as any)?.content || ''
-            onUpdate(content)
+            const updatedAt = (payload.new as any)?.updated_at || null
+            onUpdate({ content, updatedAt })
           }
         }
       )
       .subscribe()
 
     // Load initial data
-    this.loadCurrentDay().then(onUpdate)
+    this.loadCurrentDayEntry().then(onUpdate)
   }
 
   // Subscribe to real-time updates for history
@@ -102,12 +103,12 @@ export class SyncService {
   }
 
   // Load current day content from Supabase
-  async loadCurrentDay(): Promise<string> {
+  private async loadCurrentDayEntry(): Promise<{ content: string; updatedAt: string | null }> {
     const supabase = getSupabaseClient()
-    if (!supabase) return ''
+    if (!supabase) return { content: '', updatedAt: null }
     
     const userId = await this.getUserId()
-    if (!userId) return ''
+    if (!userId) return { content: '', updatedAt: null }
 
     const dateKey = this.getCurrentDateKey()
     
@@ -122,22 +123,28 @@ export class SyncService {
 
     if (error) {
       console.error('Error loading current day from Supabase:', error)
-      return localStorageStore.getCurrentDayContent()
+      return { content: localStorageStore.getCurrentDayContent(), updatedAt: null }
     }
 
-    if (!data) return localStorageStore.getCurrentDayContent()
-    return data.content || ''
+    if (!data) return { content: localStorageStore.getCurrentDayContent(), updatedAt: null }
+    return { content: data.content || '', updatedAt: data.updated_at || null }
+  }
+
+  async loadCurrentDay(): Promise<string> {
+    const entry = await this.loadCurrentDayEntry()
+    return entry.content
   }
 
   // Save current day content to Supabase
-  async saveCurrentDay(content: string): Promise<boolean> {
+  async saveCurrentDay(content: string): Promise<string | null> {
     const supabase = getSupabaseClient()
-    if (!supabase) return false
+    if (!supabase) return null
     
     const userId = await this.getUserId()
-    if (!userId) return false
+    if (!userId) return null
 
     const dateKey = this.getCurrentDateKey()
+    const updatedAt = new Date().toISOString()
 
     const { error } = await supabase
       .from('current_day')
@@ -146,16 +153,16 @@ export class SyncService {
           user_id: userId,
           date: dateKey,
           content,
-          updated_at: new Date().toISOString(),
+          updated_at: updatedAt,
         },
         { onConflict: 'user_id,date' }
       )
 
     if (error) {
       console.error('Error saving current day to Supabase:', error)
-      return false
+      return null
     }
-    return true
+    return updatedAt
   }
 
   // Load history from Supabase

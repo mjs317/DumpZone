@@ -39,11 +39,12 @@ export async function getCurrentDayContent(): Promise<string> {
   return localContent
 }
 
-export async function saveCurrentDayContent(content: string): Promise<void> {
+export async function saveCurrentDayContent(content: string): Promise<string | null> {
   localStorage.saveCurrentDayContent(content)
   if (await isAuthenticated()) {
-    await syncService.saveCurrentDay(content)
+    return await syncService.saveCurrentDay(content)
   }
+  return null
 }
 
 export async function getHistory() {
