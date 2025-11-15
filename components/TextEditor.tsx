@@ -20,14 +20,26 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const undoStackRef = useRef<string[]>([]);
   const redoStackRef = useRef<string[]>([]);
+  const initialSyncApplied = useRef(false);
   const maxUndoSteps = 50;
   const isSpeechSupported =
     typeof window !== 'undefined' &&
     (('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window));
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const colorPickerRef = useRef<HTMLDivElement>(null);
+  const [advancedMenuOpen, setAdvancedMenuOpen] = useState(false);
+  const advancedMenuRef = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
+  const [isMobile, setIsMobile] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string>('');
+  const [conflict, setConflict] = useState<{ content: string; timestamp: string } | null>(null);
   const recognitionRef = useRef<any>(null);
+
+  const triggerHaptic = () => {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate(10);
+    }
+  };
 
   const { user } = useAuth();
 
@@ -49,15 +61,34 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     // Set up real-time sync if authenticated
     if (user) {
       syncService.subscribeToCurrentDay((syncedContent) => {
-        if (editorRef.current && syncedContent !== editorRef.current.innerHTML) {
-          // Only update if content is different to avoid conflicts
-          const currentContent = editorRef.current.innerHTML;
-          if (currentContent !== syncedContent) {
-            editorRef.current.innerHTML = syncedContent;
-            setContent(syncedContent);
-            updateCounts(syncedContent);
-            undoStackRef.current = [syncedContent];
-          }
+        if (!editorRef.current) return;
+        const currentContent = editorRef.current.innerHTML;
+        if (!syncedContent && !currentContent) return;
+
+        const isEditing = typeof document !== 'undefined' && document.activeElement === editorRef.current;
+
+        if (isEditing && syncedContent !== currentContent) {
+          setConflict({
+            content: syncedContent,
+            timestamp: new Date().toLocaleTimeString([], {
+              hour: 'numeric',
+              minute: '2-digit',
+            }),
+          });
+          return;
+        }
+
+        if (syncedContent !== currentContent) {
+          editorRef.current.innerHTML = syncedContent;
+          setContent(syncedContent);
+          updateCounts(syncedContent);
+          undoStackRef.current = [syncedContent];
+          setLastSyncedAt(
+            new Date().toLocaleTimeString([], {
+              hour: 'numeric',
+              minute: '2-digit',
+            })
+          );
         }
       });
     }
@@ -66,6 +97,16 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
       syncService.cleanup();
     };
   }, [user]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const updateCounts = (text: string) => {
     setWordCount(getWordCount(text));
@@ -99,6 +140,12 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     saveTimeoutRef.current = setTimeout(async () => {
       await saveCurrentDayContent(newContent);
       setSaveStatus('saved');
+      setLastSyncedAt(
+        new Date().toLocaleTimeString([], {
+          hour: 'numeric',
+          minute: '2-digit',
+        })
+      );
       
       if (onContentChange) {
         onContentChange(newContent);
@@ -195,6 +242,17 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
   }, [handleUndo, handleRedo]);
 
   useEffect(() => {
+    if (!advancedMenuOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (advancedMenuRef.current && !advancedMenuRef.current.contains(event.target as Node)) {
+        setAdvancedMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [advancedMenuOpen]);
+
+  useEffect(() => {
     if (!colorPickerOpen) return;
     const handleClickOutside = (event: MouseEvent) => {
       if (colorPickerRef.current && !colorPickerRef.current.contains(event.target as Node)) {
@@ -263,6 +321,7 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     
     // If already recording, stop
     if (recognitionRef.current) {
+      triggerHaptic();
       recognitionRef.current.stop();
       recognitionRef.current = null;
       return;
@@ -306,6 +365,7 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     
     recognitionRef.current = recognition;
     recognition.start();
+    triggerHaptic();
   }, [handleInput, isSpeechSupported]);
 
   const handleClear = async () => {
@@ -314,6 +374,7 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     );
     
     if (confirmed && editorRef.current) {
+      triggerHaptic();
       editorRef.current.innerHTML = '';
       setContent('');
       await saveCurrentDayContent('');
@@ -325,6 +386,12 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
       if (onContentChange) {
         onContentChange('');
       }
+      setLastSyncedAt(
+        new Date().toLocaleTimeString([], {
+          hour: 'numeric',
+          minute: '2-digit',
+        })
+      );
     }
   };
 
@@ -505,7 +572,27 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     } else {
       formatText('foreColor', color);
     }
+    triggerHaptic();
     setColorPickerOpen(false);
+  };
+
+  const handleConflictAction = async (action: 'replace' | 'dismiss') => {
+    if (action === 'replace' && conflict) {
+      if (editorRef.current) {
+        editorRef.current.innerHTML = conflict.content;
+        setContent(conflict.content);
+        updateCounts(conflict.content);
+        undoStackRef.current = [conflict.content];
+        await saveCurrentDayContent(conflict.content);
+        setLastSyncedAt(
+          new Date().toLocaleTimeString([], {
+            hour: 'numeric',
+            minute: '2-digit',
+          })
+        );
+      }
+    }
+    setConflict(null);
   };
 
   const colorOptions = [
@@ -599,84 +686,76 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
 
         <div className="w-px h-6 sm:h-5 bg-gray-300 dark:bg-gray-600 mx-0.5 shrink-0" />
 
-        {/* Alignment */}
-        <div className="flex gap-0.5 shrink-0">
+        {/* Advanced Controls */}
+        <div className="relative shrink-0" ref={advancedMenuRef}>
           <button
             type="button"
-            onClick={(e) => handleButtonClick(e, 'justifyLeft')}
-            className="px-1.5 py-1.5 text-sm border rounded hover:bg-gray-200 active:bg-gray-300 dark:hover:bg-gray-700 dark:active:bg-gray-600 min-w-[32px] min-h-[32px] flex items-center justify-center shrink-0"
-            title="Align Left"
+            onClick={() => setAdvancedMenuOpen((prev) => !prev)}
+            className="px-2 py-1.5 text-sm border rounded hover:bg-gray-200 active:bg-gray-300 dark:hover:bg-gray-700 dark:active:bg-gray-600 min-w-[36px] min-h-[36px] flex items-center justify-center shrink-0"
+            title="More formatting"
           >
-            ⬅
+            ⋯
           </button>
-          <button
-            type="button"
-            onClick={(e) => handleButtonClick(e, 'justifyCenter')}
-            className="px-1.5 py-1.5 text-sm border rounded hover:bg-gray-200 active:bg-gray-300 dark:hover:bg-gray-700 dark:active:bg-gray-600 min-w-[32px] min-h-[32px] flex items-center justify-center shrink-0"
-            title="Align Center"
-          >
-            ⬌
-          </button>
-          <button
-            type="button"
-            onClick={(e) => handleButtonClick(e, 'justifyRight')}
-            className="px-1.5 py-1.5 text-sm border rounded hover:bg-gray-200 active:bg-gray-300 dark:hover:bg-gray-700 dark:active:bg-gray-600 min-w-[32px] min-h-[32px] flex items-center justify-center shrink-0"
-            title="Align Right"
-          >
-            ➡
-          </button>
-        </div>
-
-        <div className="w-px h-6 sm:h-5 bg-gray-300 dark:bg-gray-600 mx-0.5 shrink-0" />
-
-        {/* Lists */}
-        <div className="flex gap-0.5 shrink-0">
-          <button
-            type="button"
-            onClick={(e) => handleButtonClick(e, 'insertUnorderedList')}
-            className="px-1.5 py-1.5 text-sm border rounded hover:bg-gray-200 active:bg-gray-300 dark:hover:bg-gray-700 dark:active:bg-gray-600 min-w-[32px] min-h-[32px] flex items-center justify-center shrink-0"
-            title="Bullet List"
-          >
-            •
-          </button>
-          <button
-            type="button"
-            onClick={(e) => handleButtonClick(e, 'insertOrderedList')}
-            className="px-1.5 py-1.5 text-sm border rounded hover:bg-gray-200 active:bg-gray-300 dark:hover:bg-gray-700 dark:active:bg-gray-600 min-w-[32px] min-h-[32px] flex items-center justify-center shrink-0"
-            title="Numbered List"
-          >
-            1.
-          </button>
-        </div>
-
-        <div className="w-px h-6 sm:h-5 bg-gray-300 dark:bg-gray-600 mx-0.5 shrink-0" />
-
-        {/* Text Styles */}
-        <div className="flex gap-0.5 shrink-0">
-          <button
-            type="button"
-            onClick={(e) => handleButtonClick(e, 'bold')}
-            className="px-1.5 py-1.5 text-sm border rounded hover:bg-gray-200 active:bg-gray-300 dark:hover:bg-gray-700 dark:active:bg-gray-600 font-bold min-w-[32px] min-h-[32px] flex items-center justify-center shrink-0"
-            title="Bold (Cmd/Ctrl+B)"
-          >
-            B
-          </button>
-          <button
-            type="button"
-            onClick={(e) => handleButtonClick(e, 'italic')}
-            className="px-1.5 py-1.5 text-sm border rounded hover:bg-gray-200 active:bg-gray-300 dark:hover:bg-gray-700 dark:active:bg-gray-600 italic min-w-[32px] min-h-[32px] flex items-center justify-center shrink-0"
-            title="Italic (Cmd/Ctrl+I)"
-          >
-            I
-          </button>
-          <button
-            type="button"
-            onClick={(e) => handleButtonClick(e, 'underline')}
-            className="px-1.5 py-1.5 text-sm border rounded hover:bg-gray-200 active:bg-gray-300 dark:hover:bg-gray-700 dark:active:bg-gray-600 underline min-w-[32px] min-h-[32px] flex items-center justify-center shrink-0"
-            title="Underline (Cmd/Ctrl+U)"
-          >
-            U
-          </button>
+          {advancedMenuOpen && (
+            <div className="absolute right-0 mt-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-2 grid grid-cols-3 gap-2 z-30">
+              <button
+                type="button"
+                onClick={(e) => handleButtonClick(e, 'justifyLeft')}
+                className="px-2 py-1 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                ⬅
+              </button>
+              <button
+                type="button"
+                onClick={(e) => handleButtonClick(e, 'justifyCenter')}
+                className="px-2 py-1 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                ⬌
+              </button>
+              <button
+                type="button"
+                onClick={(e) => handleButtonClick(e, 'justifyRight')}
+                className="px-2 py-1 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                ➡
+              </button>
+              <button
+                type="button"
+                onClick={(e) => handleButtonClick(e, 'insertUnorderedList')}
+                className="px-2 py-1 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                •
+              </button>
+              <button
+                type="button"
+                onClick={(e) => handleButtonClick(e, 'insertOrderedList')}
+                className="px-2 py-1 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                1.
+              </button>
+              <button
+                type="button"
+                onClick={(e) => handleButtonClick(e, 'bold')}
+                className="px-2 py-1 text-sm border rounded font-bold hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                B
+              </button>
+              <button
+                type="button"
+                onClick={(e) => handleButtonClick(e, 'italic')}
+                className="px-2 py-1 text-sm border rounded italic hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                I
+              </button>
+              <button
+                type="button"
+                onClick={(e) => handleButtonClick(e, 'underline')}
+                className="px-2 py-1 text-sm border rounded underline hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                U
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Voice Input (mobile) */}
@@ -694,6 +773,68 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
           </>
         )}
       </div>
+
+      <div className="flex justify-between items-center text-[11px] text-gray-500 dark:text-gray-400 px-1.5 sm:px-0 mt-1">
+        <span>
+          {saveStatus === 'saving'
+            ? 'Syncing…'
+            : lastSyncedAt
+              ? `Synced · ${lastSyncedAt}`
+              : 'Synced'}
+        </span>
+        {isMobile && <span>Quick tools below</span>}
+      </div>
+
+      {conflict && (
+        <div className="mt-2 px-3 py-2 rounded-md bg-amber-100 dark:bg-amber-900 text-amber-900 dark:text-amber-100 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <span>Cloud version updated at {conflict.timestamp}. Load it?</span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleConflictAction('replace')}
+              className="px-3 py-1 text-xs font-medium bg-amber-600 text-white rounded hover:bg-amber-700"
+            >
+              Load cloud version
+            </button>
+            <button
+              onClick={() => handleConflictAction('dismiss')}
+              className="px-3 py-1 text-xs font-medium border border-amber-400 rounded"
+            >
+              Keep typing
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isMobile && (
+        <div className="sm:hidden mt-2 flex gap-2">
+          <button
+            type="button"
+            onClick={handleClear}
+            className="flex-1 px-3 py-2 text-sm rounded-full bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700"
+          >
+            Clear
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setColorPickerOpen(true);
+              triggerHaptic();
+            }}
+            className="flex-1 px-3 py-2 text-sm rounded-full bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700"
+          >
+            🎨 Color
+          </button>
+          {isSpeechSupported && (
+            <button
+              type="button"
+              onClick={handleVoiceInput}
+              className="flex-1 px-3 py-2 text-sm rounded-full bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700"
+            >
+              🎤 Mic
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Editor */}
       <div
@@ -713,13 +854,14 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
           <span>{wordCount} {wordCount === 1 ? 'word' : 'words'}</span>
           <span>{charCount} {charCount === 1 ? 'character' : 'characters'}</span>
         </div>
-        <div className="flex items-center gap-2">
-          {saveStatus === 'saving' && (
-            <span className="text-blue-500 dark:text-blue-400">Saving...</span>
-          )}
-          {saveStatus === 'saved' && (
-            <span className="text-green-500 dark:text-green-400">✓ Saved</span>
-          )}
+        <div className="hidden sm:flex items-center gap-2">
+          {saveStatus === 'saving'
+            ? <span className="text-blue-500 dark:text-blue-400">Syncing…</span>
+            : (
+              <span className="text-green-500 dark:text-green-400">
+                {lastSyncedAt ? `Synced · ${lastSyncedAt}` : 'Synced'}
+              </span>
+            )}
         </div>
       </div>
     </div>
