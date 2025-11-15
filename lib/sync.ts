@@ -14,11 +14,11 @@ export class SyncService {
   private listeners: Map<string, (data: any) => void> = new Map()
 
   // Subscribe to real-time updates for current day content
-  subscribeToCurrentDay(onUpdate: (content: string) => void) {
+  async subscribeToCurrentDay(onUpdate: (content: string) => void) {
     const supabase = getSupabaseClient()
     if (!supabase) return
     
-    const userId = this.getUserId()
+    const userId = await this.getUserId()
     if (!userId) return
 
     // Clean up existing subscription
@@ -50,11 +50,11 @@ export class SyncService {
   }
 
   // Subscribe to real-time updates for history
-  subscribeToHistory(onUpdate: (entries: DumpEntry[]) => void) {
+  async subscribeToHistory(onUpdate: (entries: DumpEntry[]) => void) {
     const supabase = getSupabaseClient()
     if (!supabase) return
     
-    const userId = this.getUserId()
+    const userId = await this.getUserId()
     if (!userId) return
 
     // Clean up existing subscription
