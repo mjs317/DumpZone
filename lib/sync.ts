@@ -15,7 +15,9 @@ export class SyncService {
   private listeners: Map<string, (data: any) => void> = new Map()
 
   // Subscribe to real-time updates for current day content
-  async subscribeToCurrentDay(onUpdate: (payload: { content: string; updatedAt: string | null }) => void) {
+  async subscribeToCurrentDay(
+    onUpdate: (payload: { content: string; updatedAt: string | null; commitTimestamp?: string | null }) => void
+  ) {
     const supabase = getSupabaseClient()
     if (!supabase) return
     
@@ -41,14 +43,15 @@ export class SyncService {
           if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
             const content = (payload.new as any)?.content || ''
             const updatedAt = (payload.new as any)?.updated_at || null
-            onUpdate({ content, updatedAt })
+            const commitTimestamp = payload.commit_timestamp || null
+            onUpdate({ content, updatedAt, commitTimestamp })
           }
         }
       )
       .subscribe()
 
     // Load initial data
-    this.loadCurrentDayEntry().then(onUpdate)
+    this.loadCurrentDayEntry().then(entry => onUpdate({ ...entry, commitTimestamp: null }))
   }
 
   // Subscribe to real-time updates for history

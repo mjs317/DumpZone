@@ -26,8 +26,8 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     (('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window));
   const { theme } = useTheme();
   const recognitionRef = useRef<any>(null);
-  const lastLocalSaveAtRef = useRef<number | null>(null);
   const lastLocalContentRef = useRef<string>('');
+  const lastAppliedCommitRef = useRef<number | null>(null);
 
   const { user } = useAuth();
 
@@ -58,7 +58,6 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
       setContent(savedContent);
       updateCounts(savedContent);
       lastLocalContentRef.current = savedContent;
-      lastLocalSaveAtRef.current = Date.now();
       
       if (editorRef.current) {
         editorRef.current.innerHTML = savedContent;
@@ -70,20 +69,20 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
 
     // Set up real-time sync if authenticated
     if (user) {
-      syncService.subscribeToCurrentDay(({ content: syncedContent, updatedAt }) => {
+      syncService.subscribeToCurrentDay(({ content: syncedContent, updatedAt, commitTimestamp }) => {
         if (!editorRef.current) return;
-        const remoteTimestamp = updatedAt ? new Date(updatedAt).getTime() : null;
-        const lastLocalTimestamp = lastLocalSaveAtRef.current;
+        const commitMs = commitTimestamp ? new Date(commitTimestamp).getTime() : null;
+        if (commitMs && lastAppliedCommitRef.current && commitMs < lastAppliedCommitRef.current) {
+          return;
+        }
+        if (commitMs) {
+          lastAppliedCommitRef.current = commitMs;
+        } else if (updatedAt) {
+          lastAppliedCommitRef.current = new Date(updatedAt).getTime();
+        }
         const isSameContent = syncedContent === lastLocalContentRef.current;
 
-        if (remoteTimestamp && lastLocalTimestamp) {
-          if (remoteTimestamp < lastLocalTimestamp) {
-            return;
-          }
-          if (remoteTimestamp === lastLocalTimestamp && isSameContent) {
-            return;
-          }
-        } else if (!remoteTimestamp && isSameContent) {
+        if (isSameContent) {
           return;
         }
 
@@ -94,11 +93,6 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
             setContent(syncedContent);
             updateCounts(syncedContent);
             undoStackRef.current = [syncedContent];
-            if (remoteTimestamp) {
-              lastLocalSaveAtRef.current = remoteTimestamp;
-            } else {
-              lastLocalSaveAtRef.current = Date.now();
-            }
             lastLocalContentRef.current = syncedContent;
           }
         }
@@ -136,9 +130,7 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     // For realtime sync, save immediately
     setSaveStatus('saving');
     const save = async () => {
-      const timestamp = await saveCurrentDayContent(newContent);
-      const resolvedTimestamp = timestamp ? new Date(timestamp).getTime() : Date.now();
-      lastLocalSaveAtRef.current = resolvedTimestamp;
+      await saveCurrentDayContent(newContent);
       lastLocalContentRef.current = newContent;
       setSaveStatus('saved');
       if (onContentChange) {
@@ -267,9 +259,7 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     editorRef.current.innerHTML = previousContent;
     setContent(previousContent);
     updateCounts(previousContent);
-    const timestamp = await saveCurrentDayContent(previousContent);
-    const resolvedTimestamp = timestamp ? new Date(timestamp).getTime() : Date.now();
-    lastLocalSaveAtRef.current = resolvedTimestamp;
+    await saveCurrentDayContent(previousContent);
     lastLocalContentRef.current = previousContent;
     setSaveStatus('saved');
     
@@ -292,9 +282,7 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     editorRef.current.innerHTML = nextContent;
     setContent(nextContent);
     updateCounts(nextContent);
-    const timestamp = await saveCurrentDayContent(nextContent);
-    const resolvedTimestamp = timestamp ? new Date(timestamp).getTime() : Date.now();
-    lastLocalSaveAtRef.current = resolvedTimestamp;
+    await saveCurrentDayContent(nextContent);
     lastLocalContentRef.current = nextContent;
     setSaveStatus('saved');
     
@@ -455,9 +443,7 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     if (confirmed && editorRef.current) {
       editorRef.current.innerHTML = '';
       setContent('');
-      const timestamp = await saveCurrentDayContent('');
-      const resolvedTimestamp = timestamp ? new Date(timestamp).getTime() : Date.now();
-      lastLocalSaveAtRef.current = resolvedTimestamp;
+      await saveCurrentDayContent('');
       lastLocalContentRef.current = '';
       updateCounts('');
       undoStackRef.current = [''];
