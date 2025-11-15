@@ -1,4 +1,5 @@
-import { getCurrentDateKey, getCurrentDayContent, saveToHistory, clearCurrentDay } from './storage';
+import { getCurrentDateKey } from './storage';
+import { getCurrentDayContent, saveToHistory, clearCurrentDay } from './storage-sync';
 import { saveToNotion, isNotionConnected } from './notion';
 
 let lastCheckedDate: string | null = null;
@@ -8,11 +9,15 @@ export function initializeDailyReset(onReset?: () => void): void {
   if (typeof window === 'undefined') return;
   
   // Check immediately
-  checkAndReset(onReset);
+  checkAndReset(onReset).catch((error) => {
+    console.error('Daily reset check failed:', error);
+  });
   
   // Check every minute
   resetInterval = setInterval(() => {
-    checkAndReset(onReset);
+    checkAndReset(onReset).catch((error) => {
+      console.error('Daily reset check failed:', error);
+    });
   }, 60000); // Check every minute
 }
 
@@ -27,11 +32,11 @@ export async function checkAndReset(onReset?: () => void): Promise<void> {
   // If date changed (it's a new day)
   if (lastCheckedDate !== currentDate) {
     const previousDate = lastCheckedDate;
-    const previousContent = getCurrentDayContent();
+    const previousContent = await getCurrentDayContent();
     
     // Save previous day's content to history if it exists
     if (previousContent.trim()) {
-      saveToHistory(previousContent, previousDate);
+      await saveToHistory(previousContent, previousDate);
       
       // Also save to Notion if connected
       if (isNotionConnected()) {
@@ -44,7 +49,7 @@ export async function checkAndReset(onReset?: () => void): Promise<void> {
     }
     
     // Clear current day
-    clearCurrentDay();
+    await clearCurrentDay();
     
     // Update last checked date
     lastCheckedDate = currentDate;
