@@ -10,9 +10,10 @@ import { getClientId } from '@/lib/client-id';
 
 interface TextEditorProps {
   onContentChange?: (content: string) => void;
+  stickyOffset?: number;
 }
 
-export default function TextEditor({ onContentChange }: TextEditorProps) {
+export default function TextEditor({ onContentChange, stickyOffset = 0 }: TextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [content, setContent] = useState('');
   const [wordCount, setWordCount] = useState(0);
@@ -740,9 +741,12 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
   };
 
   return (
-    <div className="flex flex-col h-full w-full">
+    <div className="flex flex-col h-full w-full min-h-0">
       {/* Toolbar */}
-      <div className="flex flex-wrap justify-center items-center gap-1.5 p-2 border-b bg-gray-50 dark:bg-gray-800 rounded-t-lg">
+      <div
+        className="flex flex-wrap justify-center items-center gap-1.5 p-2 border-b bg-gray-50/95 dark:bg-gray-800/95 rounded-t-lg sticky z-30 backdrop-blur"
+        style={{ top: stickyOffset }}
+      >
         {/* Undo/Redo */}
         <div className="flex gap-0.5 shrink-0">
           <button
@@ -914,8 +918,8 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
         contentEditable
         onInput={handleInput}
         onPaste={handlePaste}
-        className="flex-1 p-3 sm:p-4 md:p-6 focus:outline-none overflow-y-auto min-h-[300px] sm:min-h-[400px] text-base sm:text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200"
-        style={{ minHeight: 'calc(100vh - 180px)' }}
+        className="flex-1 p-3 sm:p-4 md:p-6 focus:outline-none overflow-y-auto text-base sm:text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200"
+        style={{ minHeight: '0' }}
         suppressContentEditableWarning
         data-placeholder="Start dumping your thoughts..."
       />
