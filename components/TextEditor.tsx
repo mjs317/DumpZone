@@ -13,7 +13,7 @@ interface TextEditorProps {
   stickyOffset?: number;
 }
 
-export default function TextEditor({ onContentChange, stickyOffset = 0 }: TextEditorProps) {
+export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [content, setContent] = useState('');
   const [wordCount, setWordCount] = useState(0);
@@ -740,7 +740,7 @@ export default function TextEditor({ onContentChange, stickyOffset = 0 }: TextEd
     }
   };
 
-  const computedTop = Math.max(stickyOffset ?? 0, 0);
+  const computedTop = Math.max(stickyOffset ?? 12, 0);
   const editorMaxHeight = `calc(100vh - ${computedTop + 220}px)`;
 
   return (

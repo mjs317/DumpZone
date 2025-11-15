@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Logo from '@/components/Logo';
 import TextEditor from '@/components/TextEditor';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -16,8 +16,7 @@ export const fetchCache = 'force-no-store'
 export default function Home() {
   const [currentDate, setCurrentDate] = useState('');
   const { user, signOut } = useAuth();
-  const headerRef = useRef<HTMLDivElement>(null);
-  const [toolbarOffset, setToolbarOffset] = useState(0);
+  const toolbarOffset = 12;
 
   // Initialize date on client side only
   useEffect(() => {
@@ -42,29 +41,16 @@ export default function Home() {
     };
   }, []);
 
-  useEffect(() => {
-    const updateHeight = () => {
-      if (headerRef.current) {
-        const height = headerRef.current.getBoundingClientRect().height;
-        setToolbarOffset(height + 12);
-      }
-    };
-    updateHeight();
-    window.addEventListener('resize', updateHeight);
-    return () => window.removeEventListener('resize', updateHeight);
-  }, []);
-
   return (
     <main className="min-h-screen bg-white dark:bg-gray-900 w-full transition-colors">
       <div className="max-w-4xl mx-auto px-2 sm:px-4 md:px-6 lg:px-0 w-full min-h-screen flex flex-col">
-        <div
-          ref={headerRef}
-          className="sticky top-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-200/70 dark:border-gray-800/70"
-        >
-          <div className="flex justify-center items-center py-2 relative">
-            <Link href="/" aria-label="Return home" className="cursor-pointer">
-              <Logo />
-            </Link>
+        <div className="py-2 border-b border-gray-200/70 dark:border-gray-800/70">
+          <div className="flex justify-center items-center relative">
+            <div className="flex-1 flex justify-center">
+              <Link href="/" aria-label="Return home" className="cursor-pointer">
+                <Logo />
+              </Link>
+            </div>
             <div className="absolute right-0 flex items-center">
               <ThemeToggle />
             </div>
