@@ -533,7 +533,7 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
   return (
     <div className="flex flex-col h-full w-full">
       {/* Toolbar */}
-      <div className="flex flex-wrap justify-center sm:justify-start gap-1.5 p-2 border-b bg-gray-50 dark:bg-gray-800 sticky top-0 z-10 w-full">
+      <div className="flex flex-wrap justify-center items-center gap-1.5 p-2 border-b bg-gray-50 dark:bg-gray-800 sticky top-0 z-10 w-full">
         {/* Undo/Redo */}
         <div className="flex gap-0.5 shrink-0">
           <button
