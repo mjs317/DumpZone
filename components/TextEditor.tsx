@@ -5,6 +5,7 @@ import { getCurrentDayContent, saveCurrentDayContent } from '@/lib/storage-sync'
 import { getWordCount, getCharacterCount } from '@/lib/utils';
 import { syncService } from '@/lib/sync';
 import { useAuth } from '@/components/AuthProvider';
+import { useTheme } from '@/components/ThemeProvider';
 
 interface TextEditorProps {
   onContentChange?: (content: string) => void;
@@ -25,6 +26,7 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     (('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window));
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const colorPickerRef = useRef<HTMLDivElement>(null);
+  const { theme } = useTheme();
 
   const { user } = useAuth();
 
@@ -201,6 +203,15 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [colorPickerOpen]);
+
+  useEffect(() => {
+    if (!editorRef.current) return;
+    const nodes = editorRef.current.querySelectorAll<HTMLElement>('[data-dynamic-color="black"]');
+    const resolved = theme === 'dark' ? '#FFFFFF' : '#000000';
+    nodes.forEach((node) => {
+      node.style.color = resolved;
+    });
+  }, [theme]);
 
   // Image paste support
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
@@ -446,8 +457,45 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     execCommand(format, value);
   };
 
+  const wrapSelectionWithDynamicColor = (colorKey: 'black', colorValue: string) => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !editorRef.current) return;
+
+    const range = selection.getRangeAt(0);
+    if (range.collapsed) {
+      const span = document.createElement('span');
+      span.dataset.dynamicColor = colorKey;
+      span.style.color = colorValue;
+      span.textContent = '\u200B';
+      range.insertNode(span);
+
+      const newRange = document.createRange();
+      newRange.selectNodeContents(span);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+    } else {
+      const span = document.createElement('span');
+      span.dataset.dynamicColor = colorKey;
+      span.style.color = colorValue;
+      span.appendChild(range.extractContents());
+      range.insertNode(span);
+
+      const newRange = document.createRange();
+      newRange.selectNodeContents(span);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+    }
+
+    handleInput();
+  };
+
   const applyTextColor = (color: string) => {
-    formatText('foreColor', color);
+    if (color === '#000000') {
+      const resolved = theme === 'dark' ? '#FFFFFF' : '#000000';
+      wrapSelectionWithDynamicColor('black', resolved);
+    } else {
+      formatText('foreColor', color);
+    }
     setColorPickerOpen(false);
   };
 
