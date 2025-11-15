@@ -492,7 +492,6 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     } else {
       formatText('foreColor', color);
     }
-    setColorPickerOpen(false);
   };
 
   const colorOptions = [
