@@ -31,6 +31,26 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
 
   const { user } = useAuth();
 
+  const getClosestChecklistItem = useCallback((node: Node | null): HTMLElement | null => {
+    while (node && node !== editorRef.current) {
+      if (node instanceof HTMLElement && node.classList.contains('dz-checklist-item')) {
+        return node;
+      }
+      node = node.parentNode;
+    }
+    return null;
+  }, []);
+
+  const placeCaretAtEnd = useCallback((element: HTMLElement) => {
+    const selection = window.getSelection();
+    if (!selection) return;
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }, []);
+
   useEffect(() => {
     // Load current day's content
     const loadContent = async () => {
@@ -142,6 +162,47 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     editor.addEventListener('change', handleCheckboxChange);
     return () => {
       editor.removeEventListener('change', handleCheckboxChange);
+    };
+  }, [handleInput, getClosestChecklistItem, createChecklistItem, exitChecklist, placeCaretAtEnd]);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const handleChecklistKeys = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' && event.key !== 'Tab') return;
+
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return;
+      const range = selection.getRangeAt(0);
+      const checklistItem = getClosestChecklistItem(range.startContainer);
+      if (!checklistItem) return;
+
+      event.preventDefault();
+
+      const textEl = checklistItem.querySelector<HTMLElement>('.dz-checklist-text');
+      if (!textEl) return;
+
+      const textValue = textEl.innerText.replace(/\u200B/g, '').trim();
+
+      if (textValue.length === 0) {
+        exitChecklist(checklistItem);
+        return;
+      }
+
+      const { wrapper, textSpan } = createChecklistItem('');
+      if (checklistItem.parentNode) {
+        checklistItem.parentNode.insertBefore(wrapper, checklistItem.nextSibling);
+      } else if (editorRef.current) {
+        editorRef.current.appendChild(wrapper);
+      }
+      placeCaretAtEnd(textSpan);
+      handleInput();
+    };
+
+    editor.addEventListener('keydown', handleChecklistKeys);
+    return () => {
+      editor.removeEventListener('keydown', handleChecklistKeys);
     };
   }, [handleInput]);
 
@@ -386,7 +447,7 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     }
   };
 
-  const createChecklistItem = (text: string) => {
+  const createChecklistItem = useCallback((text: string) => {
     const wrapper = document.createElement('div');
     wrapper.className = 'dz-checklist-item';
 
@@ -403,7 +464,7 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     wrapper.appendChild(checkbox);
     wrapper.appendChild(textSpan);
     return { wrapper, textSpan };
-  };
+  }, []);
 
   const insertChecklist = () => {
     if (!editorRef.current) return;
@@ -454,6 +515,25 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
 
     handleInput();
   };
+
+  const exitChecklist = useCallback((currentItem: HTMLElement) => {
+    const parent = currentItem.parentNode;
+    const nextSibling = currentItem.nextSibling;
+    currentItem.remove();
+
+    const newLine = document.createElement('div');
+    const br = document.createElement('br');
+    newLine.appendChild(br);
+
+    if (parent) {
+      parent.insertBefore(newLine, nextSibling);
+    } else if (editorRef.current) {
+      editorRef.current.appendChild(newLine);
+    }
+
+    placeCaretAtEnd(newLine);
+    handleInput();
+  }, [handleInput, placeCaretAtEnd]);
 
   const insertList = (ordered: boolean) => {
     if (!editorRef.current) return;

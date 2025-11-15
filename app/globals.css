@@ -6,14 +6,39 @@
 }
 
 [contenteditable] .dz-checkbox {
-  width: 1rem;
-  height: 1rem;
-  margin-top: 0.35rem;
+  appearance: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.25rem;
+  margin-right: 0.15rem;
+  border: 2px solid currentColor;
+  border-radius: 0.25rem;
+  background: transparent;
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 [contenteditable] .dz-checklist-text {
   flex: 1;
   min-height: 1.5rem;
+}
+
+[contenteditable] .dz-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  top: 0.1rem;
+  left: 0.35rem;
+  width: 0.25rem;
+  height: 0.55rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+
+[contenteditable] .dz-checkbox:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }
 
 [contenteditable] .dz-checkbox:checked + .dz-checklist-text {
