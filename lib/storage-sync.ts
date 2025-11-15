@@ -27,17 +27,22 @@ async function isAuthenticated(): Promise<boolean> {
 
 // Hybrid storage functions that automatically use Supabase or localStorage
 export async function getCurrentDayContent(): Promise<string> {
+  const localContent = localStorage.getCurrentDayContent()
   if (await isAuthenticated()) {
-    return await syncService.loadCurrentDay()
+    const remoteContent = await syncService.loadCurrentDay()
+    if (!remoteContent && localContent) {
+      await syncService.saveCurrentDay(localContent)
+      return localContent
+    }
+    return remoteContent || localContent
   }
-  return localStorage.getCurrentDayContent()
+  return localContent
 }
 
 export async function saveCurrentDayContent(content: string): Promise<void> {
+  localStorage.saveCurrentDayContent(content)
   if (await isAuthenticated()) {
     await syncService.saveCurrentDay(content)
-  } else {
-    localStorage.saveCurrentDayContent(content)
   }
 }
 
@@ -132,10 +137,9 @@ export async function getPinnedEntries() {
 }
 
 export async function clearCurrentDay(): Promise<void> {
+  localStorage.clearCurrentDay()
   if (await isAuthenticated()) {
     await syncService.clearCurrentDay()
-  } else {
-    localStorage.clearCurrentDay()
   }
 }
 

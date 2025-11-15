@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/client'
 import { DumpEntry } from './storage'
+import * as localStorageStore from './storage'
 
 // Lazy Supabase client - only create when needed (not during SSR/build)
 function getSupabaseClient() {
@@ -112,12 +113,19 @@ export class SyncService {
     
     const { data, error } = await supabase
       .from('current_day')
-      .select('content')
+      .select('content, updated_at')
       .eq('user_id', userId)
       .eq('date', dateKey)
-      .single()
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
-    if (error || !data) return ''
+    if (error) {
+      console.error('Error loading current day from Supabase:', error)
+      return localStorageStore.getCurrentDayContent()
+    }
+
+    if (!data) return localStorageStore.getCurrentDayContent()
     return data.content || ''
   }
 
@@ -133,14 +141,21 @@ export class SyncService {
 
     const { error } = await supabase
       .from('current_day')
-      .upsert({
-        user_id: userId,
-        date: dateKey,
-        content,
-        updated_at: new Date().toISOString(),
-      })
+      .upsert(
+        {
+          user_id: userId,
+          date: dateKey,
+          content,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,date' }
+      )
 
-    return !error
+    if (error) {
+      console.error('Error saving current day to Supabase:', error)
+      return false
+    }
+    return true
   }
 
   // Load history from Supabase
