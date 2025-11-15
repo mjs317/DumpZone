@@ -88,20 +88,16 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     updateCounts(newContent);
     saveToUndoStack(newContent);
     
-    // Debounced save
+    // For realtime sync, save immediately
     setSaveStatus('saving');
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-    
-    saveTimeoutRef.current = setTimeout(async () => {
+    const save = async () => {
       await saveCurrentDayContent(newContent);
       setSaveStatus('saved');
-      
       if (onContentChange) {
         onContentChange(newContent);
       }
-    }, 500);
+    };
+    save();
   }, [onContentChange]);
 
   const handleUndo = useCallback(async (e?: React.MouseEvent | KeyboardEvent) => {
