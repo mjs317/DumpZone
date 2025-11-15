@@ -27,6 +27,7 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const colorPickerRef = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
+  const recognitionRef = useRef<any>(null);
 
   const { user } = useAuth();
 
@@ -259,6 +260,13 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
       alert('Voice input is not supported in your browser.');
       return;
     }
+    
+    // If already recording, stop
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+      return;
+    }
 
     const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
     const recognition = new SpeechRecognition();
@@ -293,9 +301,10 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
       }
     };
     recognition.onend = () => {
-      recognition.stop();
+      recognitionRef.current = null;
     };
     
+    recognitionRef.current = recognition;
     recognition.start();
   }, [handleInput, isSpeechSupported]);
 
