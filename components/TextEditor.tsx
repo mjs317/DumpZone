@@ -494,6 +494,15 @@ export default function TextEditor({ onContentChange }: TextEditorProps) {
     }
   };
 
+  useEffect(() => {
+    if (!editorRef.current) return;
+    const nodes = editorRef.current.querySelectorAll<HTMLElement>('[data-dynamic-color="black"]');
+    const resolved = theme === 'dark' ? '#FFFFFF' : '#000000';
+    nodes.forEach((node) => {
+      node.style.color = resolved;
+    });
+  }, [theme]);
+
   const colorOptions = [
     { label: 'Black', value: '#000000', swatch: 'bg-gray-900' },
     { label: 'Red', value: '#ef4444', swatch: 'bg-red-500' },
