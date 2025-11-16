@@ -22,12 +22,13 @@ export class SyncService {
       commitTimestamp?: string | null
       mutationId?: string | null
       clientId?: string | null
-    }) => void
+    }) => void,
+    userIdOverride?: string | null
   ) {
     const supabase = getSupabaseClient()
     if (!supabase) return
     
-    const userId = await this.getUserId()
+    const userId = userIdOverride ?? (await this.getUserId())
     if (!userId) return
 
     // Clean up existing subscription

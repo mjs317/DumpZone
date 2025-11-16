@@ -77,7 +77,7 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
         updateCounts(syncedContent);
         undoStackRef.current = [syncedContent];
         lastLocalContentRef.current = syncedContent;
-      });
+      }, user.id);
     }
 
     return () => {
