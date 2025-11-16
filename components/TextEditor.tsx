@@ -18,6 +18,7 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
   const [wordCount, setWordCount] = useState(0);
   const [charCount, setCharCount] = useState(0);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const undoStackRef = useRef<string[]>([]);
   const redoStackRef = useRef<string[]>([]);
@@ -249,6 +250,18 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
       editor.removeEventListener('keydown', handleChecklistKeys);
     };
   }, [handleInput, getClosestChecklistItem, createChecklistItem, exitChecklist, placeCaretAtEnd]);
+
+  // Prevent body scrolling when in fullscreen mode
+  useEffect(() => {
+    if (isFullscreen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isFullscreen]);
 
   const handleUndo = useCallback(async (e?: React.MouseEvent | KeyboardEvent) => {
     if (e) {
@@ -735,15 +748,29 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
     }
   };
 
+  const toggleFullscreen = () => {
+    setIsFullscreen(!isFullscreen);
+  };
+
   const computedTop = Math.max(stickyOffset ?? 12, 0);
-  const editorMaxHeight = `calc(100vh - ${computedTop + 220}px)`;
+  const editorMaxHeight = isFullscreen 
+    ? `calc(100vh - ${computedTop + 120}px)` 
+    : `calc(100vh - ${computedTop + 220}px)`;
 
   return (
-    <div className="flex flex-col h-full w-full min-h-0">
+    <div 
+      className={`flex flex-col w-full min-h-0 transition-all duration-300 ${
+        isFullscreen 
+          ? 'fixed inset-0 z-50 bg-white dark:bg-gray-900' 
+          : 'h-full'
+      }`}
+    >
       {/* Toolbar */}
       <div
-        className="flex flex-wrap justify-center items-center gap-1.5 p-2 border-b bg-gray-50/95 dark:bg-gray-800/95 rounded-t-lg sticky z-30 backdrop-blur"
-        style={{ top: computedTop }}
+        className={`flex flex-wrap justify-center items-center gap-1.5 p-2 border-b bg-gray-50/95 dark:bg-gray-800/95 backdrop-blur ${
+          isFullscreen ? 'sticky top-0 z-40 rounded-none' : 'sticky rounded-t-lg'
+        }`}
+        style={isFullscreen ? { top: 0 } : { top: computedTop }}
       >
         {/* Undo/Redo */}
         <div className="flex gap-0.5 shrink-0">
@@ -908,6 +935,17 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
             </button>
           </>
         )}
+
+        {/* Fullscreen Toggle */}
+        <div className="w-px h-6 sm:h-5 bg-gray-300 dark:bg-gray-600 mx-0.5 shrink-0" />
+        <button
+          type="button"
+          onClick={toggleFullscreen}
+          className="px-1.5 py-1.5 text-sm border rounded hover:bg-gray-200 active:bg-gray-300 dark:hover:bg-gray-700 dark:active:bg-gray-600 min-w-[32px] min-h-[32px] flex items-center justify-center shrink-0"
+          title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+        >
+          {isFullscreen ? '⤓' : '⤢'}
+        </button>
       </div>
 
       {/* Editor */}
@@ -916,17 +954,23 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
         contentEditable
         onInput={handleInput}
         onPaste={handlePaste}
-        className="flex-1 p-3 sm:p-4 md:p-6 focus:outline-none overflow-y-auto text-base sm:text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200"
+        className={`flex-1 p-3 sm:p-4 md:p-6 focus:outline-none overflow-y-auto text-base sm:text-base text-gray-900 dark:text-gray-200 ${
+          isFullscreen ? 'bg-white dark:bg-gray-900' : 'bg-white dark:bg-gray-800'
+        }`}
         style={{
-          minHeight: '360px',
-          maxHeight: editorMaxHeight,
+          minHeight: isFullscreen ? 'calc(100vh - 140px)' : '360px',
+          maxHeight: isFullscreen ? 'calc(100vh - 140px)' : editorMaxHeight,
         }}
         suppressContentEditableWarning
         data-placeholder="Start dumping your thoughts..."
       />
 
       {/* Footer with stats and save status */}
-      <div className="flex justify-between items-center px-3 sm:px-4 md:px-6 py-2 border-t bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+      <div className={`flex justify-between items-center px-3 sm:px-4 md:px-6 py-2 border-t text-xs sm:text-sm text-gray-500 dark:text-gray-400 ${
+        isFullscreen 
+          ? 'bg-gray-50 dark:bg-gray-900 dark:border-gray-700' 
+          : 'bg-gray-50 dark:bg-gray-800 dark:border-gray-700'
+      }`}>
         <div className="flex gap-3 sm:gap-4">
           <span>{wordCount} {wordCount === 1 ? 'word' : 'words'}</span>
           <span>{charCount} {charCount === 1 ? 'character' : 'characters'}</span>
