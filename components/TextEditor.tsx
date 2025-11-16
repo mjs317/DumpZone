@@ -68,20 +68,10 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
 
     // Set up real-time sync if authenticated
     if (user) {
-      syncService.subscribeToCurrentDay(({ content: syncedContent, commitTimestamp }) => {
+      syncService.subscribeToCurrentDay(({ content: syncedContent }) => {
         if (!editorRef.current) return;
-        const commitMs = commitTimestamp ? new Date(commitTimestamp).getTime() : null;
-        if (commitMs) {
-          if (lastAppliedCommitRef.current && commitMs < lastAppliedCommitRef.current) {
-            return;
-          }
-          lastAppliedCommitRef.current = commitMs;
-        }
-
-        if (syncedContent === editorRef.current.innerHTML) {
-          return;
-        }
-
+        if (syncedContent === editorRef.current.innerHTML) return;
+        // Apply any remote change that differs from current DOM
         editorRef.current.innerHTML = syncedContent;
         setContent(syncedContent);
         updateCounts(syncedContent);
