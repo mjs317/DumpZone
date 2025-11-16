@@ -61,9 +61,27 @@ export async function saveCurrentDayContent(
 ): Promise<{ updatedAt: string | null; mutationId: string | null } | null> {
   localStorage.saveCurrentDayContent(content)
 
+  // Strategy:
+  // 1) Try client-side Supabase save (fast path; works when auth is ready on device)
+  // 2) Fallback to API route which uses server-side Supabase (works when client auth is flaky)
   try {
     const clientId = getClientId()
     const mutationId = createMutationId()
+
+    // Fast path: client-side Supabase
+    try {
+      const direct = await syncService.saveCurrentDay(content, { clientId, mutationId })
+      if (direct && direct.updatedAt) {
+        return {
+          updatedAt: direct.updatedAt,
+          mutationId: direct.mutationId ?? mutationId,
+        }
+      }
+    } catch (e) {
+      // continue to API fallback
+    }
+
+    // Fallback path: API route (server-side Supabase with cookies)
     const response = await fetch('/api/current-day', {
       method: 'POST',
       headers: {
@@ -82,12 +100,12 @@ export async function saveCurrentDayContent(
         updatedAt: data.updatedAt ?? null,
         mutationId,
       }
-    } else if (response.status !== 401) {
-      const errorText = await response.text()
-      console.error('Failed to sync current day content:', errorText)
+    } else {
+      const errorText = await response.text().catch(() => '')
+      console.error('Failed to sync via API route:', response.status, errorText)
     }
   } catch (error) {
-    console.error('Supabase save failed, falling back to local only:', error)
+    console.error('saveCurrentDayContent: sync failed, local only:', error)
   }
 
   return null
