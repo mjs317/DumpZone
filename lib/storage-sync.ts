@@ -87,6 +87,8 @@ export async function saveCurrentDayContent(
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
+      cache: 'no-store',
       body: JSON.stringify({
         content,
         clientId,
