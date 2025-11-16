@@ -78,27 +78,6 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
         undoStackRef.current = [syncedContent];
         lastLocalContentRef.current = syncedContent;
       });
-
-      // Safety net: periodic pull to avoid missed realtime events on mobile networks
-      const pullInterval = setInterval(async () => {
-        try {
-          const latest = await getCurrentDayContent();
-          if (editorRef.current && latest !== editorRef.current.innerHTML) {
-            editorRef.current.innerHTML = latest;
-            setContent(latest);
-            updateCounts(latest);
-            undoStackRef.current = [latest];
-            lastLocalContentRef.current = latest;
-          }
-        } catch {
-          // ignore transient errors
-        }
-      }, 2500);
-
-      return () => {
-        clearInterval(pullInterval);
-        syncService.cleanup();
-      };
     }
 
     return () => {
@@ -132,11 +111,14 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
     // For realtime sync, save immediately
     setSaveStatus('saving');
     const save = async () => {
-      await saveCurrentDayContent(newContent);
-      lastLocalContentRef.current = newContent;
-      setSaveStatus('saved');
-      if (onContentChange) {
-        onContentChange(newContent);
+      try {
+        await saveCurrentDayContent(newContent);
+      } finally {
+        lastLocalContentRef.current = newContent;
+        setSaveStatus('saved');
+        if (onContentChange) {
+          onContentChange(newContent);
+        }
       }
     };
     save();
