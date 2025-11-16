@@ -78,6 +78,27 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
         undoStackRef.current = [syncedContent];
         lastLocalContentRef.current = syncedContent;
       });
+
+      // Safety net: periodic pull to avoid missed realtime events on mobile networks
+      const pullInterval = setInterval(async () => {
+        try {
+          const latest = await getCurrentDayContent();
+          if (editorRef.current && latest !== editorRef.current.innerHTML) {
+            editorRef.current.innerHTML = latest;
+            setContent(latest);
+            updateCounts(latest);
+            undoStackRef.current = [latest];
+            lastLocalContentRef.current = latest;
+          }
+        } catch {
+          // ignore transient errors
+        }
+      }, 2500);
+
+      return () => {
+        clearInterval(pullInterval);
+        syncService.cleanup();
+      };
     }
 
     return () => {
