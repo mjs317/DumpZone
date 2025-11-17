@@ -134,8 +134,37 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
       }, user.id);
     }
 
+    // Fallback: Periodic check for updates (in case real-time events are missed)
+    // This ensures sync works even if real-time has issues
+    let pollInterval: NodeJS.Timeout | null = null;
+    if (user) {
+      pollInterval = setInterval(async () => {
+        if (!editorRef.current) return;
+        
+        try {
+          const remoteContent = await getCurrentDayContent();
+          const currentContent = editorRef.current.innerHTML;
+          
+          // Only update if content differs and we didn't just save it
+          if (remoteContent !== currentContent && remoteContent !== lastLocalContentRef.current) {
+            console.log('🔄 Polling detected remote update, applying...');
+            editorRef.current.innerHTML = remoteContent;
+            setContent(remoteContent);
+            updateCounts(remoteContent);
+            undoStackRef.current = [remoteContent];
+            lastLocalContentRef.current = remoteContent;
+          }
+        } catch (error) {
+          console.error('Polling check failed:', error);
+        }
+      }, 5000); // Check every 5 seconds as fallback
+    }
+
     return () => {
       syncService.cleanup();
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
     };
   }, [user]);
 

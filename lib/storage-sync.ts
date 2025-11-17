@@ -72,27 +72,9 @@ export async function saveCurrentDayContent(
     // First, ensure we check auth and cache userId (important for mobile)
     const isAuth = await isAuthenticated()
     
-    // Fast path: client-side Supabase (only if authenticated)
-    if (isAuth) {
-      try {
-        const direct = await syncService.saveCurrentDay(content, { clientId, mutationId })
-        if (direct && direct.updatedAt) {
-          return {
-            updatedAt: direct.updatedAt,
-            mutationId: direct.mutationId ?? mutationId,
-          }
-        }
-      } catch (e) {
-        console.warn('Client-side Supabase save failed, trying API route:', e)
-        // Continue to API fallback
-      }
-    }
-
-    // Fallback path: API route (server-side Supabase with cookies)
-    // This works even if client-side auth check failed, as server has access to cookies
-    // IMPORTANT: Don't send clientId when using API route, as it causes the real-time
-    // event to be filtered out on the same device. The API route should set clientId to null
-    // so the real-time event is received by all devices including the sender.
+    // Strategy: Always try API route first for mobile reliability
+    // API route uses server-side Supabase which is more reliable for real-time events
+    // Client-side saves can be flaky on mobile browsers
     try {
       const response = await fetch('/api/current-day', {
         method: 'POST',
@@ -118,14 +100,59 @@ export async function saveCurrentDayContent(
           mutationId,
         }
       } else if (response.status === 401) {
-        // Not authenticated - this is expected for non-logged-in users
+        // Not authenticated - try client-side as fallback
+        console.log('API route not authenticated, trying client-side save')
+        if (isAuth) {
+          try {
+            const direct = await syncService.saveCurrentDay(content, { clientId, mutationId })
+            if (direct && direct.updatedAt) {
+              console.log('✅ Client-side save successful (fallback)')
+              return {
+                updatedAt: direct.updatedAt,
+                mutationId: direct.mutationId ?? mutationId,
+              }
+            }
+          } catch (e) {
+            console.warn('Client-side Supabase save also failed:', e)
+          }
+        }
         console.log('Not authenticated, saving locally only')
       } else {
         const errorText = await response.text().catch(() => '')
         console.error('❌ Failed to sync via API route:', response.status, errorText)
+        // Fallback to client-side if API route fails
+        if (isAuth) {
+          try {
+            const direct = await syncService.saveCurrentDay(content, { clientId, mutationId })
+            if (direct && direct.updatedAt) {
+              console.log('✅ Client-side save successful (fallback after API error)')
+              return {
+                updatedAt: direct.updatedAt,
+                mutationId: direct.mutationId ?? mutationId,
+              }
+            }
+          } catch (e) {
+            console.warn('Client-side Supabase save also failed:', e)
+          }
+        }
       }
     } catch (fetchError) {
-      console.error('API route fetch failed:', fetchError)
+      console.error('API route fetch failed, trying client-side:', fetchError)
+      // Fallback to client-side if fetch fails
+      if (isAuth) {
+        try {
+          const direct = await syncService.saveCurrentDay(content, { clientId, mutationId })
+          if (direct && direct.updatedAt) {
+            console.log('✅ Client-side save successful (fallback after fetch error)')
+            return {
+              updatedAt: direct.updatedAt,
+              mutationId: direct.mutationId ?? mutationId,
+            }
+          }
+        } catch (e) {
+          console.warn('Client-side Supabase save also failed:', e)
+        }
+      }
     }
   } catch (error) {
     console.error('saveCurrentDayContent: sync failed, local only:', error)

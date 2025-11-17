@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   const dateKey = `${year}-${month}-${day}`
   const updatedAt = new Date().toISOString()
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('current_day')
     .upsert(
       {
@@ -34,12 +34,17 @@ export async function POST(request: Request) {
       },
       { onConflict: 'user_id,date' }
     )
+    .select('updated_at')
+    .single()
 
   if (error) {
     console.error('Failed to upsert current day content:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ updatedAt })
+  // Log successful save for debugging
+  console.log('✅ API route: Successfully saved content for user:', user.id, 'date:', dateKey, 'content length:', content.length)
+
+  return NextResponse.json({ updatedAt: data?.updated_at || updatedAt })
 }
 
