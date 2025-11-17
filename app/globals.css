@@ -17,6 +17,11 @@
   position: relative;
   cursor: pointer;
   flex-shrink: 0;
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 [contenteditable] .dz-checklist-text {

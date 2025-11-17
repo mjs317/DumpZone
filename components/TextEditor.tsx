@@ -191,6 +191,33 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
     const editor = editorRef.current;
     if (!editor) return;
 
+    const handleCheckboxClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (target && target.matches('.dz-checkbox')) {
+        event.preventDefault();
+        event.stopPropagation();
+        
+        const checkbox = target as HTMLInputElement;
+        // Manually toggle the checkbox
+        checkbox.checked = !checkbox.checked;
+        
+        // Update the checked attribute for persistence
+        if (checkbox.checked) {
+          checkbox.setAttribute('checked', 'checked');
+        } else {
+          checkbox.removeAttribute('checked');
+        }
+        
+        // Prevent cursor placement
+        const selection = window.getSelection();
+        if (selection) {
+          selection.removeAllRanges();
+        }
+        
+        handleInput();
+      }
+    };
+
     const handleCheckboxChange = (event: Event) => {
       const target = event.target as HTMLElement;
       if (target && target.matches('.dz-checkbox')) {
@@ -204,8 +231,12 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
       }
     };
 
+    // Use mousedown instead of click to prevent cursor placement
+    editor.addEventListener('mousedown', handleCheckboxClick, true); // Use capture phase
     editor.addEventListener('change', handleCheckboxChange);
+    
     return () => {
+      editor.removeEventListener('mousedown', handleCheckboxClick, true);
       editor.removeEventListener('change', handleCheckboxChange);
     };
   }, [handleInput]);
