@@ -79,6 +79,7 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
 
     // Set up real-time sync if authenticated
     if (user) {
+      console.log('🔌 Setting up real-time subscription for user:', user.id)
       syncService.subscribeToCurrentDay(({ content: syncedContent, mutationId, clientId }) => {
         if (!editorRef.current) return;
         
@@ -167,8 +168,13 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
       try {
         const result = await saveCurrentDayContent(newContent);
         if (result?.mutationId) {
+          console.log('💾 Local save completed, tracking mutationId:', result.mutationId)
           ignoreMutationIdsRef.current.add(result.mutationId);
+        } else {
+          console.log('💾 Local save completed, no mutationId returned')
         }
+      } catch (error) {
+        console.error('💾 Save error:', error)
       } finally {
         lastLocalContentRef.current = newContent;
         setSaveStatus('saved');

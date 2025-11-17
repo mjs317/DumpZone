@@ -52,25 +52,47 @@ export class SyncService {
           filter: `user_id=eq.${userId}`,
         },
         async (payload: any) => {
+          console.log('🔔 Raw postgres_changes event:', {
+            eventType: payload.eventType,
+            table: payload.table,
+            schema: payload.schema,
+            hasNew: !!payload.new,
+            commitTimestamp: payload.commit_timestamp
+          })
+          
           if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
             const content = (payload.new as any)?.content || ''
             const updatedAt = (payload.new as any)?.updated_at || null
             const commitTimestamp = payload.commit_timestamp || null
             const mutationId = (payload.new as any)?.mutation_id || null
             const clientId = (payload.new as any)?.client_id || null
+            
+            console.log('📤 Calling onUpdate with:', {
+              contentLength: content.length,
+              updatedAt,
+              commitTimestamp,
+              mutationId,
+              clientId
+            })
+            
             onUpdate({ content, updatedAt, commitTimestamp, mutationId, clientId })
+          } else {
+            console.log('⚠️ Ignoring event type:', payload.eventType)
           }
         }
       )
       .subscribe((status: string) => {
+        console.log('📡 Subscription status changed:', status, 'for userId:', userId)
         if (status === 'SUBSCRIBED') {
-          console.log('Real-time subscription active for current day')
+          console.log('✅ Real-time subscription active for current day, userId:', userId)
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('Real-time subscription error, attempting to reconnect...')
+          console.warn('❌ Real-time subscription error, attempting to reconnect...')
           // Re-subscribe after a short delay
           setTimeout(() => {
             this.subscribeToCurrentDay(onUpdate, userIdOverride).catch(console.error)
           }, 2000)
+        } else {
+          console.log('ℹ️ Subscription status:', status)
         }
       })
 
