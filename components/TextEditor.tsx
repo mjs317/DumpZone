@@ -34,6 +34,8 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
   const ignoreMutationIdsRef = useRef<Set<string>>(new Set());
   const lastInputTimeRef = useRef<number>(0);
   const isTypingRef = useRef<boolean>(false);
+  const lastSaveTimeRef = useRef<number>(0); // Track when we last saved locally
+  const deferredUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { user } = useAuth();
 
   const getClosestChecklistItem = useCallback((node: Node | null): HTMLElement | null => {
@@ -74,6 +76,8 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
       if (editorRef.current) {
         editorRef.current.innerHTML = savedContent;
         undoStackRef.current = [savedContent];
+        // Initialize save time to prevent immediate overwrites
+        lastSaveTimeRef.current = Date.now();
       }
     };
 
@@ -82,26 +86,50 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
     // Set up real-time sync if authenticated
     if (user) {
       console.log('🔌 Setting up real-time subscription for user:', user.id)
-      syncService.subscribeToCurrentDay(({ content: syncedContent, mutationId, clientId }) => {
+      syncService.subscribeToCurrentDay(({ content: syncedContent, mutationId, clientId, updatedAt }) => {
         if (!editorRef.current) return;
+        
+        // Clear any pending deferred updates
+        if (deferredUpdateTimeoutRef.current) {
+          clearTimeout(deferredUpdateTimeoutRef.current);
+          deferredUpdateTimeoutRef.current = null;
+        }
         
         // Don't apply updates if user is actively typing (within last 2 seconds)
         const timeSinceLastInput = Date.now() - lastInputTimeRef.current;
+        const timeSinceLastSave = Date.now() - lastSaveTimeRef.current;
+        
+        // If user just saved locally (within last 500ms), don't apply remote update
+        // This prevents overwriting content that was just saved
+        if (timeSinceLastSave < 500) {
+          console.log('⏸️ Just saved locally, ignoring remote update to prevent conflict');
+          return;
+        }
+        
         if (isTypingRef.current || timeSinceLastInput < 2000) {
           console.log('⏸️ User is typing, deferring remote update');
-          // Schedule update for after user stops typing
-          setTimeout(() => {
+          // Schedule update for after user stops typing, but only if remote is newer
+          const remoteTimestamp = updatedAt ? new Date(updatedAt).getTime() : Date.now();
+          deferredUpdateTimeoutRef.current = setTimeout(() => {
             if (!isTypingRef.current && editorRef.current) {
               const currentContent = editorRef.current.innerHTML;
-              if (syncedContent !== currentContent && syncedContent !== lastLocalContentRef.current) {
-                console.log('✅ Applying deferred remote update');
+              const currentTimestamp = lastSaveTimeRef.current;
+              
+              // Only apply if remote is newer than our last save
+              if (remoteTimestamp > currentTimestamp && 
+                  syncedContent !== currentContent && 
+                  syncedContent !== lastLocalContentRef.current) {
+                console.log('✅ Applying deferred remote update (remote is newer)');
                 editorRef.current.innerHTML = syncedContent;
                 setContent(syncedContent);
                 updateCounts(syncedContent);
                 undoStackRef.current = [syncedContent];
                 lastLocalContentRef.current = syncedContent;
+              } else {
+                console.log('🚫 Skipping deferred update (local is newer or content matches)');
               }
             }
+            deferredUpdateTimeoutRef.current = null;
           }, 2500);
           return;
         }
@@ -142,14 +170,24 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
           ignoreMutationIdsRef.current.delete(mutationId);
         }
         
+        // Check if remote content is actually newer than our last save
+        const remoteTimestamp = updatedAt ? new Date(updatedAt).getTime() : Date.now();
+        const currentTimestamp = lastSaveTimeRef.current;
+        
+        // Don't apply if remote is older than our last save (prevent overwriting newer content)
+        if (remoteTimestamp < currentTimestamp && currentTimestamp > 0) {
+          console.log('🚫 Remote content is older than local save, skipping update');
+          return;
+        }
+        
         // Don't apply if content is identical
         if (syncedContent === editorRef.current.innerHTML) {
           console.log('🚫 Content identical, skipping update');
           return;
         }
         
-        // Apply any remote change that differs from current DOM
-        console.log('✅ Applying remote update');
+        // Apply any remote change that differs from current DOM and is newer
+        console.log('✅ Applying remote update (remote is newer)');
         editorRef.current.innerHTML = syncedContent;
         setContent(syncedContent);
         updateCounts(syncedContent);
@@ -199,6 +237,10 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
       syncService.cleanup();
       if (pollInterval) {
         clearInterval(pollInterval);
+      }
+      if (deferredUpdateTimeoutRef.current) {
+        clearTimeout(deferredUpdateTimeoutRef.current);
+        deferredUpdateTimeoutRef.current = null;
       }
     };
   }, [user]);
@@ -250,6 +292,7 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
         console.error('💾 Save error:', error)
       } finally {
         lastLocalContentRef.current = newContent;
+        lastSaveTimeRef.current = Date.now(); // Track when we saved
         setSaveStatus('saved');
         if (onContentChange) {
           onContentChange(newContent);
@@ -426,6 +469,7 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
       ignoreMutationIdsRef.current.add(result.mutationId);
     }
     lastLocalContentRef.current = previousContent;
+    lastSaveTimeRef.current = Date.now();
     setSaveStatus('saved');
     
     if (onContentChange) {
@@ -452,6 +496,7 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
       ignoreMutationIdsRef.current.add(result.mutationId);
     }
     lastLocalContentRef.current = nextContent;
+    lastSaveTimeRef.current = Date.now();
     setSaveStatus('saved');
     
     if (onContentChange) {
@@ -616,6 +661,7 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
         ignoreMutationIdsRef.current.add(result.mutationId);
       }
       lastLocalContentRef.current = '';
+      lastSaveTimeRef.current = Date.now();
       updateCounts('');
       undoStackRef.current = [''];
       redoStackRef.current = [];
