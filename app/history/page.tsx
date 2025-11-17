@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Logo from '@/components/Logo';
 import ThemeToggle from '@/components/ThemeToggle';
-import { getHistory, DumpEntry, togglePinEntry, addTagsToEntry, removeTagFromEntry, getAllTags } from '@/lib/storage';
+import { getHistory, togglePinEntry, addTagsToEntry, removeTagFromEntry, getAllTags, DumpEntry } from '@/lib/storage-sync';
 import { exportEntryAsMarkdown, exportEntryAsText } from '@/lib/export';
 
 export const dynamic = 'force-dynamic';
@@ -13,16 +13,44 @@ export default function HistoryPage() {
   const [entries, setEntries] = useState<DumpEntry[]>([]);
   const [editingTags, setEditingTags] = useState<string | null>(null);
   const [newTag, setNewTag] = useState('');
-  const [allTags] = useState<string[]>(getAllTags());
+  const [allTags, setAllTags] = useState<string[]>([]);
   const [filterTag, setFilterTag] = useState<string | null>(null);
   const [showPinnedOnly, setShowPinnedOnly] = useState(false);
 
   useEffect(() => {
     loadEntries();
+    loadTags();
+    
+    // Refresh data when page becomes visible (e.g., after daily reset)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadEntries();
+        loadTags();
+      }
+    };
+    
+    // Refresh every 30 seconds to catch daily resets
+    const interval = setInterval(() => {
+      loadEntries();
+      loadTags();
+    }, 30000);
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(interval);
+    };
   }, [filterTag, showPinnedOnly]);
 
-  const loadEntries = () => {
-    let history = getHistory().reverse();
+  const loadTags = async () => {
+    const tags = await getAllTags();
+    setAllTags(tags);
+  };
+
+  const loadEntries = async () => {
+    let history = await getHistory();
+    history = history.reverse();
     
     if (showPinnedOnly) {
       history = history.filter(e => e.pinned);
@@ -35,22 +63,25 @@ export default function HistoryPage() {
     setEntries(history);
   };
 
-  const handleTogglePin = (entryId: string) => {
-    togglePinEntry(entryId);
-    loadEntries();
+  const handleTogglePin = async (entryId: string) => {
+    await togglePinEntry(entryId);
+    await loadEntries();
+    await loadTags();
   };
 
-  const handleAddTag = (entryId: string, tag: string) => {
+  const handleAddTag = async (entryId: string, tag: string) => {
     if (tag.trim()) {
-      addTagsToEntry(entryId, [tag.trim()]);
-      loadEntries();
+      await addTagsToEntry(entryId, [tag.trim()]);
+      await loadEntries();
+      await loadTags();
       setNewTag('');
     }
   };
 
-  const handleRemoveTag = (entryId: string, tag: string) => {
-    removeTagFromEntry(entryId, tag);
-    loadEntries();
+  const handleRemoveTag = async (entryId: string, tag: string) => {
+    await removeTagFromEntry(entryId, tag);
+    await loadEntries();
+    await loadTags();
   };
 
   const handleExport = (entry: DumpEntry, format: 'markdown' | 'text') => {

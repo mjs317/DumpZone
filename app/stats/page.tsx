@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Logo from '@/components/Logo';
 import ThemeToggle from '@/components/ThemeToggle';
-import { getHistory, getPinnedEntries } from '@/lib/storage';
+import { getHistory, getPinnedEntries } from '@/lib/storage-sync';
 import { getWordCount, getCharacterCount } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -24,8 +24,9 @@ export default function StatsPage() {
   });
 
   useEffect(() => {
-    const entries = getHistory();
-    const pinned = getPinnedEntries();
+    const loadStats = async () => {
+      const entries = await getHistory();
+      const pinned = await getPinnedEntries();
     
     let totalWords = 0;
     let totalChars = 0;
@@ -90,18 +91,40 @@ export default function StatsPage() {
       lastDate = date;
     });
 
-    setStats({
-      totalDumps: entries.length,
-      totalWords,
-      totalCharacters: totalChars,
-      averageWords: entries.length > 0 ? Math.round(totalWords / entries.length) : 0,
-      averageCharacters: entries.length > 0 ? Math.round(totalChars / entries.length) : 0,
-      pinnedCount: pinned.length,
-      longestDump: longest,
-      shortestDump: shortest.words === Infinity ? { date: '', words: 0 } : shortest,
-      currentStreak,
-      longestStreak,
-    });
+      setStats({
+        totalDumps: entries.length,
+        totalWords,
+        totalCharacters: totalChars,
+        averageWords: entries.length > 0 ? Math.round(totalWords / entries.length) : 0,
+        averageCharacters: entries.length > 0 ? Math.round(totalChars / entries.length) : 0,
+        pinnedCount: pinned.length,
+        longestDump: longest,
+        shortestDump: shortest.words === Infinity ? { date: '', words: 0 } : shortest,
+        currentStreak,
+        longestStreak,
+      });
+    };
+    
+    loadStats();
+    
+    // Refresh data when page becomes visible (e.g., after daily reset)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadStats();
+      }
+    };
+    
+    // Refresh every 30 seconds to catch daily resets
+    const interval = setInterval(() => {
+      loadStats();
+    }, 30000);
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(interval);
+    };
   }, []);
 
   const StatCard = ({ title, value, subtitle }: { title: string; value: string | number; subtitle?: string }) => (
