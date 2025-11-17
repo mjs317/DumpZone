@@ -182,23 +182,67 @@ export class SyncService {
       return { content: '', updatedAt: null, clientId: null, mutationId: null }
     }
     
-    const userId = await this.getUserId()
+    // Ensure we have a user ID - retry if needed
+    let userId = await this.getUserId()
     if (!userId) {
-      console.log('⚠️ loadCurrentDayEntry: No user ID')
-      return { content: '', updatedAt: null, clientId: null, mutationId: null }
+      // Wait a bit and retry (auth might still be initializing)
+      await new Promise(resolve => setTimeout(resolve, 500))
+      userId = await this.getUserId()
+      if (!userId) {
+        console.log('⚠️ loadCurrentDayEntry: No user ID after retry')
+        return { content: '', updatedAt: null, clientId: null, mutationId: null }
+      }
     }
 
     const dateKey = this.getCurrentDateKey()
-    console.log('📥 loadCurrentDayEntry: Fetching content for user:', userId, 'date:', dateKey)
+    console.log('📥 loadCurrentDayEntry: Fetching content for user:', userId, 'date:', dateKey, 'date type:', typeof dateKey)
     
-    const { data, error } = await supabase
+    // Try querying with the date string - Supabase should handle DATE type conversion
+    // Also try querying all rows for this user and filter client-side as fallback
+    let { data, error } = await supabase
       .from('current_day')
-      .select('content, updated_at, client_id, mutation_id')
+      .select('content, updated_at, client_id, mutation_id, date')
       .eq('user_id', userId)
       .eq('date', dateKey)
       .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle()
+
+    // If query failed or returned no data, try getting all entries for this user and filter
+    if (error || !data) {
+      console.log('⚠️ Direct date query failed or no data, trying alternative query...', error?.message)
+      
+      // Get all entries for this user and filter by date client-side
+      const { data: allData, error: allError } = await supabase
+        .from('current_day')
+        .select('content, updated_at, client_id, mutation_id, date')
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false })
+      
+      if (!allError && allData && allData.length > 0) {
+        // Find the entry matching today's date
+        const todayEntry = allData.find((entry: any) => {
+          // Handle both string and Date object formats
+          const entryDate = entry.date
+          if (!entryDate) return false
+          
+          // Convert to string format for comparison
+          const entryDateStr = typeof entryDate === 'string' 
+            ? entryDate 
+            : new Date(entryDate).toISOString().split('T')[0]
+          
+          return entryDateStr === dateKey
+        })
+        
+        if (todayEntry) {
+          console.log('✅ Found entry via alternative query, length:', todayEntry.content?.length || 0)
+          data = todayEntry
+          error = null
+        } else {
+          console.log('📭 No entry found for date:', dateKey, 'in', allData.length, 'entries')
+        }
+      }
+    }
 
     if (error) {
       console.error('❌ Error loading current day from Supabase:', error)
@@ -215,7 +259,7 @@ export class SyncService {
     }
     
     const content = data.content || ''
-    console.log('✅ loadCurrentDayEntry: Loaded content from database, length:', content.length, 'updated_at:', data.updated_at)
+    console.log('✅ loadCurrentDayEntry: Loaded content from database, length:', content.length, 'updated_at:', data.updated_at, 'date in DB:', data.date)
     return { 
       content, 
       updatedAt: data.updated_at || null,
