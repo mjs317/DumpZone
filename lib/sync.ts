@@ -82,13 +82,15 @@ export class SyncService {
         }
       )
       .subscribe((status: string) => {
-        console.log('📡 Subscription status changed:', status, 'for userId:', userId)
+        console.log('📡 Subscription status changed:', status, 'for userId:', userId, 'channel:', `current-day-${userId}`)
         if (status === 'SUBSCRIBED') {
           console.log('✅ Real-time subscription active for current day, userId:', userId)
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('❌ Real-time subscription error, attempting to reconnect...')
+          console.log('📋 Listening for postgres_changes on table: current_day, filter: user_id=eq.' + userId)
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          console.warn('❌ Real-time subscription error/closed:', status, '- attempting to reconnect...')
           // Re-subscribe after a short delay
           setTimeout(() => {
+            console.log('🔄 Attempting to re-subscribe...')
             this.subscribeToCurrentDay(onUpdate, userIdOverride).catch(console.error)
           }, 2000)
         } else {

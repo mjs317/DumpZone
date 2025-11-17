@@ -21,6 +21,8 @@ export async function POST(request: Request) {
   const dateKey = `${year}-${month}-${day}`
   const updatedAt = new Date().toISOString()
 
+  // Use upsert with explicit conflict resolution
+  // This should trigger a real-time UPDATE event (or INSERT if new)
   const { data, error } = await supabase
     .from('current_day')
     .upsert(
@@ -32,18 +34,23 @@ export async function POST(request: Request) {
         client_id: clientId ?? null,
         mutation_id: mutationId ?? null,
       },
-      { onConflict: 'user_id,date' }
+      { 
+        onConflict: 'user_id,date',
+        // Ensure we always update, not just insert
+        ignoreDuplicates: false
+      }
     )
-    .select('updated_at')
+    .select('updated_at, content')
     .single()
 
   if (error) {
-    console.error('Failed to upsert current day content:', error)
+    console.error('❌ API route: Failed to upsert current day content:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
   // Log successful save for debugging
   console.log('✅ API route: Successfully saved content for user:', user.id, 'date:', dateKey, 'content length:', content.length)
+  console.log('📤 API route: This should trigger a real-time postgres_changes event')
 
   return NextResponse.json({ updatedAt: data?.updated_at || updatedAt })
 }
