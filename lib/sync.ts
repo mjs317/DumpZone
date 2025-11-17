@@ -34,10 +34,15 @@ export class SyncService {
     // Clean up existing subscription
     if (this.currentDaySubscription) {
       this.currentDaySubscription.unsubscribe()
+      this.currentDaySubscription = null
     }
 
-    this.currentDaySubscription = supabase
-      .channel(`current-day-${userId}`)
+    const channel = supabase
+      .channel(`current-day-${userId}`, {
+        config: {
+          broadcast: { self: false },
+        },
+      })
       .on(
         'postgres_changes',
         {
@@ -57,12 +62,33 @@ export class SyncService {
           }
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Real-time subscription active for current day')
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('Real-time subscription error, attempting to reconnect...')
+          // Re-subscribe after a short delay
+          setTimeout(() => {
+            this.subscribeToCurrentDay(onUpdate, userIdOverride).catch(console.error)
+          }, 2000)
+        }
+      })
+
+    this.currentDaySubscription = channel
 
     // Load initial data
-    this.loadCurrentDayEntry().then(entry =>
-      onUpdate({ ...entry, commitTimestamp: null, mutationId: null, clientId: null })
-    )
+    try {
+      const entry = await this.loadCurrentDayEntry()
+      onUpdate({ 
+        content: entry.content, 
+        updatedAt: entry.updatedAt, 
+        commitTimestamp: null,
+        mutationId: entry.mutationId,
+        clientId: entry.clientId
+      })
+    } catch (error) {
+      console.error('Failed to load initial current day content:', error)
+    }
   }
 
   // Subscribe to real-time updates for history
@@ -125,18 +151,18 @@ export class SyncService {
   }
 
   // Load current day content from Supabase
-  private async loadCurrentDayEntry(): Promise<{ content: string; updatedAt: string | null }> {
+  private async loadCurrentDayEntry(): Promise<{ content: string; updatedAt: string | null; clientId: string | null; mutationId: string | null }> {
     const supabase = getSupabaseClient()
-    if (!supabase) return { content: '', updatedAt: null }
+    if (!supabase) return { content: '', updatedAt: null, clientId: null, mutationId: null }
     
     const userId = await this.getUserId()
-    if (!userId) return { content: '', updatedAt: null }
+    if (!userId) return { content: '', updatedAt: null, clientId: null, mutationId: null }
 
     const dateKey = this.getCurrentDateKey()
     
     const { data, error } = await supabase
       .from('current_day')
-      .select('content, updated_at')
+      .select('content, updated_at, client_id, mutation_id')
       .eq('user_id', userId)
       .eq('date', dateKey)
       .order('updated_at', { ascending: false })
@@ -145,11 +171,16 @@ export class SyncService {
 
     if (error) {
       console.error('Error loading current day from Supabase:', error)
-      return { content: localStorageStore.getCurrentDayContent(), updatedAt: null }
+      return { content: localStorageStore.getCurrentDayContent(), updatedAt: null, clientId: null, mutationId: null }
     }
 
-    if (!data) return { content: localStorageStore.getCurrentDayContent(), updatedAt: null }
-    return { content: data.content || '', updatedAt: data.updated_at || null }
+    if (!data) return { content: localStorageStore.getCurrentDayContent(), updatedAt: null, clientId: null, mutationId: null }
+    return { 
+      content: data.content || '', 
+      updatedAt: data.updated_at || null,
+      clientId: data.client_id || null,
+      mutationId: data.mutation_id || null
+    }
   }
 
   async loadCurrentDay(): Promise<string> {
@@ -293,9 +324,13 @@ export class SyncService {
     return !error
   }
 
-  // Helper function
+  // Helper function - uses local timezone, not UTC
   private getCurrentDateKey(): string {
-    return new Date().toISOString().split('T')[0]
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`; // YYYY-MM-DD format in local timezone
   }
 
   // Cleanup subscriptions

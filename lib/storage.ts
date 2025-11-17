@@ -12,7 +12,12 @@ const CURRENT_DAY_KEY = 'dump-zone-current-day';
 const CURRENT_CONTENT_KEY = 'dump-zone-current-content';
 
 export function getCurrentDateKey(): string {
-  return new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+  // Use local timezone, not UTC, so reset happens at midnight in user's timezone
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`; // YYYY-MM-DD format in local timezone
 }
 
 export function getCurrentDayContent(): string {
