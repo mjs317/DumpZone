@@ -37,16 +37,34 @@ async function isAuthenticated(): Promise<boolean> {
 
 // Hybrid storage functions that automatically use Supabase or localStorage
 export async function getCurrentDayContent(): Promise<string> {
-  const localContent = localStorage.getCurrentDayContent()
   if (await isAuthenticated()) {
-    const remoteContent = await syncService.loadCurrentDay()
-    if (!remoteContent && localContent) {
-      await syncService.saveCurrentDay(localContent)
+    // When authenticated, remote content is the source of truth
+    try {
+      const remoteContent = await syncService.loadCurrentDay()
+      // Always use remote content (even if empty string) and sync to local storage
+      // This ensures we get the latest saved content from the database
+      if (remoteContent !== null && remoteContent !== undefined) {
+        // Update local storage to match remote (for offline fallback)
+        localStorage.saveCurrentDayContent(remoteContent)
+        return remoteContent
+      }
+      // If remote fetch failed, try local as fallback
+      const localContent = localStorage.getCurrentDayContent()
+      if (localContent) {
+        // Try to sync local to remote
+        await syncService.saveCurrentDay(localContent).catch(() => {})
+        return localContent
+      }
+      return ''
+    } catch (error) {
+      console.error('Error loading remote content, using local fallback:', error)
+      // On error, fall back to local storage
+      const localContent = localStorage.getCurrentDayContent()
       return localContent
     }
-    return remoteContent || localContent
   }
-  return localContent
+  // Not authenticated, use local storage only
+  return localStorage.getCurrentDayContent()
 }
 
 function createMutationId() {
