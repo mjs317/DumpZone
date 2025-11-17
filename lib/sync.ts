@@ -62,7 +62,7 @@ export class SyncService {
           }
         }
       )
-      .subscribe((status) => {
+      .subscribe((status: string) => {
         if (status === 'SUBSCRIBED') {
           console.log('Real-time subscription active for current day')
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
