@@ -199,67 +199,110 @@ export class SyncService {
     const dateKey = this.getCurrentDateKey()
     console.log('📥 loadCurrentDayEntry: Fetching content for user:', userId, 'date:', dateKey)
     
-    // PRIMARY STRATEGY: Get ALL entries for this user, then filter client-side
-    // This is more reliable than date filtering which can have format/timezone issues
-    const { data: allData, error: allError } = await supabase
+    // STRATEGY: Get the MOST RECENT entry (by updated_at) for this user
+    // If it was updated today (within last 24 hours), use it
+    // This avoids date format issues entirely
+    const { data: recentData, error: recentError } = await supabase
       .from('current_day')
       .select('content, updated_at, client_id, mutation_id, date')
       .eq('user_id', userId)
       .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
     
-    if (allError) {
-      console.error('❌ Error loading current day entries:', allError)
-      // Don't fall back to local storage - return empty to force fresh load
-      return { content: '', updatedAt: null, clientId: null, mutationId: null }
-    }
-    
-    if (!allData || allData.length === 0) {
-      console.log('📭 No entries found in database for user:', userId)
-      // Don't fall back to local storage - return empty
-      return { content: '', updatedAt: null, clientId: null, mutationId: null }
-    }
-    
-    // Find the entry matching today's date
-    // Handle various date formats that PostgreSQL might return
-    const todayEntry = allData.find((entry: any) => {
-      const entryDate = entry.date
-      if (!entryDate) return false
+    if (recentError) {
+      console.error('❌ Error loading most recent entry:', recentError)
+      // Try fallback: get all entries
+      const { data: allData, error: allError } = await supabase
+        .from('current_day')
+        .select('content, updated_at, client_id, mutation_id, date')
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false })
       
-      // Normalize date to YYYY-MM-DD string format
-      let entryDateStr: string
-      if (typeof entryDate === 'string') {
-        // If it's already a string, use it (might be "2024-01-15" or ISO format)
-        entryDateStr = entryDate.split('T')[0] // Take date part only
-      } else if (entryDate instanceof Date) {
-        // If it's a Date object
-        entryDateStr = entryDate.toISOString().split('T')[0]
-      } else {
-        // If it's some other format, try to convert
-        entryDateStr = new Date(entryDate).toISOString().split('T')[0]
+      if (allError) {
+        console.error('❌ Error loading all entries:', allError)
+        return { content: '', updatedAt: null, clientId: null, mutationId: null }
       }
       
-      // Compare normalized dates
-      const matches = entryDateStr === dateKey
-      if (matches) {
-        console.log('✅ Found matching entry, date in DB:', entryDate, 'normalized:', entryDateStr, 'matches:', dateKey)
+      if (!allData || allData.length === 0) {
+        console.log('📭 No entries found in database for user:', userId)
+        return { content: '', updatedAt: null, clientId: null, mutationId: null }
       }
-      return matches
-    })
-    
-    if (todayEntry) {
-      const content = todayEntry.content || ''
-      console.log('✅ loadCurrentDayEntry: Loaded content from database, length:', content.length, 'updated_at:', todayEntry.updated_at)
+      
+      // Use the most recent entry from the fallback query
+      const mostRecent = allData[0]
+      const content = mostRecent.content || ''
+      console.log('✅ loadCurrentDayEntry: Using most recent entry from fallback, length:', content.length, 'date:', mostRecent.date, 'updated_at:', mostRecent.updated_at)
       return { 
         content, 
-        updatedAt: todayEntry.updated_at || null,
-        clientId: todayEntry.client_id || null,
-        mutationId: todayEntry.mutation_id || null
+        updatedAt: mostRecent.updated_at || null,
+        clientId: mostRecent.client_id || null,
+        mutationId: mostRecent.mutation_id || null
       }
     }
     
-    // No entry found for today - return empty (don't use stale local storage)
-    console.log('📭 No entry found for date:', dateKey, 'in', allData.length, 'entries. Available dates:', allData.map((e: any) => e.date))
+    if (!recentData) {
+      console.log('📭 No recent entry found in database for user:', userId)
+      return { content: '', updatedAt: null, clientId: null, mutationId: null }
+    }
+    
+    // Check if the most recent entry is from today
+    // Compare the date field (normalized) with today's date
+    const entryDate = recentData.date
+    let entryDateStr: string = ''
+    
+    if (entryDate) {
+      if (typeof entryDate === 'string') {
+        entryDateStr = entryDate.split('T')[0]
+      } else if (entryDate instanceof Date) {
+        entryDateStr = entryDate.toISOString().split('T')[0]
+      } else {
+        entryDateStr = new Date(entryDate).toISOString().split('T')[0]
+      }
+    }
+    
+    // Also check if updated_at is from today (within last 24 hours)
+    const updatedAt = recentData.updated_at
+    const isFromToday = updatedAt ? this.isDateToday(updatedAt) : false
+    const dateMatches = entryDateStr === dateKey
+    
+    console.log('📊 Entry check:', {
+      entryDate: entryDate,
+      entryDateStr,
+      dateKey,
+      dateMatches,
+      updatedAt,
+      isFromToday,
+      contentLength: recentData.content?.length || 0
+    })
+    
+    // Use the entry if date matches OR if it was updated today
+    if (dateMatches || isFromToday) {
+      const content = recentData.content || ''
+      console.log('✅ loadCurrentDayEntry: Using entry (date matches or updated today), length:', content.length)
+      return { 
+        content, 
+        updatedAt: recentData.updated_at || null,
+        clientId: recentData.client_id || null,
+        mutationId: recentData.mutation_id || null
+      }
+    }
+    
+    // Entry exists but is not from today - return empty
+    console.log('📭 Most recent entry is not from today, returning empty')
     return { content: '', updatedAt: null, clientId: null, mutationId: null }
+  }
+  
+  // Helper to check if a timestamp is from today (within last 24 hours)
+  private isDateToday(timestamp: string): boolean {
+    try {
+      const entryTime = new Date(timestamp).getTime()
+      const now = Date.now()
+      const twentyFourHours = 24 * 60 * 60 * 1000
+      return (now - entryTime) < twentyFourHours
+    } catch {
+      return false
+    }
   }
 
   async loadCurrentDay(): Promise<string> {
