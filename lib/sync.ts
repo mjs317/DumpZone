@@ -177,12 +177,19 @@ export class SyncService {
   // Load current day content from Supabase
   private async loadCurrentDayEntry(): Promise<{ content: string; updatedAt: string | null; clientId: string | null; mutationId: string | null }> {
     const supabase = getSupabaseClient()
-    if (!supabase) return { content: '', updatedAt: null, clientId: null, mutationId: null }
+    if (!supabase) {
+      console.log('⚠️ loadCurrentDayEntry: No Supabase client')
+      return { content: '', updatedAt: null, clientId: null, mutationId: null }
+    }
     
     const userId = await this.getUserId()
-    if (!userId) return { content: '', updatedAt: null, clientId: null, mutationId: null }
+    if (!userId) {
+      console.log('⚠️ loadCurrentDayEntry: No user ID')
+      return { content: '', updatedAt: null, clientId: null, mutationId: null }
+    }
 
     const dateKey = this.getCurrentDateKey()
+    console.log('📥 loadCurrentDayEntry: Fetching content for user:', userId, 'date:', dateKey)
     
     const { data, error } = await supabase
       .from('current_day')
@@ -194,13 +201,23 @@ export class SyncService {
       .maybeSingle()
 
     if (error) {
-      console.error('Error loading current day from Supabase:', error)
-      return { content: localStorageStore.getCurrentDayContent(), updatedAt: null, clientId: null, mutationId: null }
+      console.error('❌ Error loading current day from Supabase:', error)
+      const localContent = localStorageStore.getCurrentDayContent()
+      console.log('📦 Falling back to local storage, content length:', localContent.length)
+      return { content: localContent, updatedAt: null, clientId: null, mutationId: null }
     }
 
-    if (!data) return { content: localStorageStore.getCurrentDayContent(), updatedAt: null, clientId: null, mutationId: null }
+    if (!data) {
+      console.log('📭 No data found in database for date:', dateKey)
+      const localContent = localStorageStore.getCurrentDayContent()
+      console.log('📦 Falling back to local storage, content length:', localContent.length)
+      return { content: localContent, updatedAt: null, clientId: null, mutationId: null }
+    }
+    
+    const content = data.content || ''
+    console.log('✅ loadCurrentDayEntry: Loaded content from database, length:', content.length, 'updated_at:', data.updated_at)
     return { 
-      content: data.content || '', 
+      content, 
       updatedAt: data.updated_at || null,
       clientId: data.client_id || null,
       mutationId: data.mutation_id || null

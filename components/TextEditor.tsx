@@ -70,7 +70,9 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
   useEffect(() => {
     // Load current day's content
     const loadContent = async () => {
+      console.log('🔄 TextEditor: Loading content on mount...');
       const savedContent = await getCurrentDayContent();
+      console.log('📥 TextEditor: Loaded content, length:', savedContent.length);
       setContent(savedContent);
       updateCounts(savedContent);
       lastLocalContentRef.current = savedContent;
@@ -91,6 +93,7 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
         lastSaveTimeRef.current = initTimestamp;
         lastSavedContentRef.current = savedContent;
         lastSavedTimestampRef.current = initTimestamp;
+        console.log('✅ TextEditor: Content loaded and initialized');
       }
     };
 
