@@ -32,6 +32,8 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
   const lastAppliedCommitRef = useRef<number | null>(null);
   const clientIdRef = useRef<string | null>(null);
   const ignoreMutationIdsRef = useRef<Set<string>>(new Set());
+  const lastInputTimeRef = useRef<number>(0);
+  const isTypingRef = useRef<boolean>(false);
   const { user } = useAuth();
 
   const getClosestChecklistItem = useCallback((node: Node | null): HTMLElement | null => {
@@ -83,12 +85,34 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
       syncService.subscribeToCurrentDay(({ content: syncedContent, mutationId, clientId }) => {
         if (!editorRef.current) return;
         
+        // Don't apply updates if user is actively typing (within last 2 seconds)
+        const timeSinceLastInput = Date.now() - lastInputTimeRef.current;
+        if (isTypingRef.current || timeSinceLastInput < 2000) {
+          console.log('⏸️ User is typing, deferring remote update');
+          // Schedule update for after user stops typing
+          setTimeout(() => {
+            if (!isTypingRef.current && editorRef.current) {
+              const currentContent = editorRef.current.innerHTML;
+              if (syncedContent !== currentContent && syncedContent !== lastLocalContentRef.current) {
+                console.log('✅ Applying deferred remote update');
+                editorRef.current.innerHTML = syncedContent;
+                setContent(syncedContent);
+                updateCounts(syncedContent);
+                undoStackRef.current = [syncedContent];
+                lastLocalContentRef.current = syncedContent;
+              }
+            }
+          }, 2500);
+          return;
+        }
+        
         console.log('📡 Real-time event received:', { 
           hasClientId: !!clientId, 
           clientIdMatches: clientId === clientIdRef.current,
           hasMutationId: !!mutationId,
           mutationIdIgnored: mutationId ? ignoreMutationIdsRef.current.has(mutationId) : false,
-          contentLength: syncedContent.length
+          contentLength: syncedContent.length,
+          timeSinceLastInput
         });
         
         // Ignore echoes of our own writes to prevent caret jumps
@@ -136,17 +160,28 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
 
     // Fallback: Periodic check for updates (in case real-time events are missed)
     // This ensures sync works even if real-time has issues
+    // Only poll when user is NOT actively typing to prevent cursor jumps
     let pollInterval: NodeJS.Timeout | null = null;
     if (user) {
       pollInterval = setInterval(async () => {
         if (!editorRef.current) return;
+        
+        // Don't poll if user is actively typing
+        const timeSinceLastInput = Date.now() - lastInputTimeRef.current;
+        if (isTypingRef.current || timeSinceLastInput < 3000) {
+          return; // User is typing, skip this poll
+        }
         
         try {
           const remoteContent = await getCurrentDayContent();
           const currentContent = editorRef.current.innerHTML;
           
           // Only update if content differs and we didn't just save it
-          if (remoteContent !== currentContent && remoteContent !== lastLocalContentRef.current) {
+          // And user hasn't typed recently
+          if (remoteContent !== currentContent && 
+              remoteContent !== lastLocalContentRef.current &&
+              !isTypingRef.current &&
+              timeSinceLastInput >= 3000) {
             console.log('🔄 Polling detected remote update, applying...');
             editorRef.current.innerHTML = remoteContent;
             setContent(remoteContent);
@@ -157,7 +192,7 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
         } catch (error) {
           console.error('Polling check failed:', error);
         }
-      }, 5000); // Check every 5 seconds as fallback
+      }, 10000); // Check every 10 seconds as fallback (less aggressive)
     }
 
     return () => {
@@ -190,6 +225,15 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
     setContent(newContent);
     updateCounts(newContent);
     saveToUndoStack(newContent);
+    
+    // Track that user is actively typing
+    lastInputTimeRef.current = Date.now();
+    isTypingRef.current = true;
+    
+    // Clear typing flag after a short delay
+    setTimeout(() => {
+      isTypingRef.current = false;
+    }, 1000);
     
     // For realtime sync, save immediately
     setSaveStatus('saving');
