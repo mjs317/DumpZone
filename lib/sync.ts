@@ -182,90 +182,84 @@ export class SyncService {
       return { content: '', updatedAt: null, clientId: null, mutationId: null }
     }
     
-    // Ensure we have a user ID - retry if needed
+    // Ensure we have a user ID - retry up to 3 times with increasing delays
     let userId = await this.getUserId()
-    if (!userId) {
-      // Wait a bit and retry (auth might still be initializing)
-      await new Promise(resolve => setTimeout(resolve, 500))
+    let retries = 0
+    while (!userId && retries < 3) {
+      await new Promise(resolve => setTimeout(resolve, 500 * (retries + 1)))
       userId = await this.getUserId()
-      if (!userId) {
-        console.log('⚠️ loadCurrentDayEntry: No user ID after retry')
-        return { content: '', updatedAt: null, clientId: null, mutationId: null }
-      }
+      retries++
+    }
+    
+    if (!userId) {
+      console.log('⚠️ loadCurrentDayEntry: No user ID after retries')
+      return { content: '', updatedAt: null, clientId: null, mutationId: null }
     }
 
     const dateKey = this.getCurrentDateKey()
-    console.log('📥 loadCurrentDayEntry: Fetching content for user:', userId, 'date:', dateKey, 'date type:', typeof dateKey)
+    console.log('📥 loadCurrentDayEntry: Fetching content for user:', userId, 'date:', dateKey)
     
-    // Try querying with the date string - Supabase should handle DATE type conversion
-    // Also try querying all rows for this user and filter client-side as fallback
-    let { data, error } = await supabase
+    // PRIMARY STRATEGY: Get ALL entries for this user, then filter client-side
+    // This is more reliable than date filtering which can have format/timezone issues
+    const { data: allData, error: allError } = await supabase
       .from('current_day')
       .select('content, updated_at, client_id, mutation_id, date')
       .eq('user_id', userId)
-      .eq('date', dateKey)
       .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    // If query failed or returned no data, try getting all entries for this user and filter
-    if (error || !data) {
-      console.log('⚠️ Direct date query failed or no data, trying alternative query...', error?.message)
-      
-      // Get all entries for this user and filter by date client-side
-      const { data: allData, error: allError } = await supabase
-        .from('current_day')
-        .select('content, updated_at, client_id, mutation_id, date')
-        .eq('user_id', userId)
-        .order('updated_at', { ascending: false })
-      
-      if (!allError && allData && allData.length > 0) {
-        // Find the entry matching today's date
-        const todayEntry = allData.find((entry: any) => {
-          // Handle both string and Date object formats
-          const entryDate = entry.date
-          if (!entryDate) return false
-          
-          // Convert to string format for comparison
-          const entryDateStr = typeof entryDate === 'string' 
-            ? entryDate 
-            : new Date(entryDate).toISOString().split('T')[0]
-          
-          return entryDateStr === dateKey
-        })
-        
-        if (todayEntry) {
-          console.log('✅ Found entry via alternative query, length:', todayEntry.content?.length || 0)
-          data = todayEntry
-          error = null
-        } else {
-          console.log('📭 No entry found for date:', dateKey, 'in', allData.length, 'entries')
-        }
-      }
-    }
-
-    if (error) {
-      console.error('❌ Error loading current day from Supabase:', error)
-      const localContent = localStorageStore.getCurrentDayContent()
-      console.log('📦 Falling back to local storage, content length:', localContent.length)
-      return { content: localContent, updatedAt: null, clientId: null, mutationId: null }
-    }
-
-    if (!data) {
-      console.log('📭 No data found in database for date:', dateKey)
-      const localContent = localStorageStore.getCurrentDayContent()
-      console.log('📦 Falling back to local storage, content length:', localContent.length)
-      return { content: localContent, updatedAt: null, clientId: null, mutationId: null }
+    
+    if (allError) {
+      console.error('❌ Error loading current day entries:', allError)
+      // Don't fall back to local storage - return empty to force fresh load
+      return { content: '', updatedAt: null, clientId: null, mutationId: null }
     }
     
-    const content = data.content || ''
-    console.log('✅ loadCurrentDayEntry: Loaded content from database, length:', content.length, 'updated_at:', data.updated_at, 'date in DB:', data.date)
-    return { 
-      content, 
-      updatedAt: data.updated_at || null,
-      clientId: data.client_id || null,
-      mutationId: data.mutation_id || null
+    if (!allData || allData.length === 0) {
+      console.log('📭 No entries found in database for user:', userId)
+      // Don't fall back to local storage - return empty
+      return { content: '', updatedAt: null, clientId: null, mutationId: null }
     }
+    
+    // Find the entry matching today's date
+    // Handle various date formats that PostgreSQL might return
+    const todayEntry = allData.find((entry: any) => {
+      const entryDate = entry.date
+      if (!entryDate) return false
+      
+      // Normalize date to YYYY-MM-DD string format
+      let entryDateStr: string
+      if (typeof entryDate === 'string') {
+        // If it's already a string, use it (might be "2024-01-15" or ISO format)
+        entryDateStr = entryDate.split('T')[0] // Take date part only
+      } else if (entryDate instanceof Date) {
+        // If it's a Date object
+        entryDateStr = entryDate.toISOString().split('T')[0]
+      } else {
+        // If it's some other format, try to convert
+        entryDateStr = new Date(entryDate).toISOString().split('T')[0]
+      }
+      
+      // Compare normalized dates
+      const matches = entryDateStr === dateKey
+      if (matches) {
+        console.log('✅ Found matching entry, date in DB:', entryDate, 'normalized:', entryDateStr, 'matches:', dateKey)
+      }
+      return matches
+    })
+    
+    if (todayEntry) {
+      const content = todayEntry.content || ''
+      console.log('✅ loadCurrentDayEntry: Loaded content from database, length:', content.length, 'updated_at:', todayEntry.updated_at)
+      return { 
+        content, 
+        updatedAt: todayEntry.updated_at || null,
+        clientId: todayEntry.client_id || null,
+        mutationId: todayEntry.mutation_id || null
+      }
+    }
+    
+    // No entry found for today - return empty (don't use stale local storage)
+    console.log('📭 No entry found for date:', dateKey, 'in', allData.length, 'entries. Available dates:', allData.map((e: any) => e.date))
+    return { content: '', updatedAt: null, clientId: null, mutationId: null }
   }
 
   async loadCurrentDay(): Promise<string> {

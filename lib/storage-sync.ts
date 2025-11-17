@@ -45,34 +45,27 @@ export async function getCurrentDayContent(): Promise<string> {
       const remoteContent = await syncService.loadCurrentDay()
       console.log('📥 getCurrentDayContent: Received remote content, length:', remoteContent?.length ?? 0)
       
-      // Always use remote content (even if empty string) and sync to local storage
+      // CRITICAL: Always use remote content (even if empty string)
       // This ensures we get the latest saved content from the database
+      // Remote content is the single source of truth when authenticated
       if (remoteContent !== null && remoteContent !== undefined) {
-        // Update local storage to match remote (for offline fallback)
+        // Update local storage to match remote (for offline fallback only)
         localStorage.saveCurrentDayContent(remoteContent)
         console.log('✅ getCurrentDayContent: Using remote content, synced to local storage')
         return remoteContent
       }
       
-      // If remote fetch returned null/undefined, try local as fallback
-      console.log('⚠️ getCurrentDayContent: Remote content was null/undefined, trying local...')
-      const localContent = localStorage.getCurrentDayContent()
-      if (localContent) {
-        console.log('📦 getCurrentDayContent: Found local content, syncing to remote...')
-        // Try to sync local to remote
-        await syncService.saveCurrentDay(localContent).catch((e) => {
-          console.error('Failed to sync local to remote:', e)
-        })
-        return localContent
-      }
-      console.log('📭 getCurrentDayContent: No local content either, returning empty')
+      // If remote fetch returned null/undefined, return empty
+      // DO NOT use local storage as fallback - it might be stale
+      // The database is the source of truth
+      console.log('📭 getCurrentDayContent: Remote content was null/undefined, returning empty (not using stale local storage)')
       return ''
     } catch (error) {
-      console.error('❌ getCurrentDayContent: Error loading remote content, using local fallback:', error)
-      // On error, fall back to local storage
-      const localContent = localStorage.getCurrentDayContent()
-      console.log('📦 getCurrentDayContent: Using local fallback, length:', localContent.length)
-      return localContent
+      console.error('❌ getCurrentDayContent: Error loading remote content:', error)
+      // On error, return empty instead of using potentially stale local storage
+      // The database is the source of truth - if we can't load it, start fresh
+      console.log('📭 getCurrentDayContent: Error occurred, returning empty (not using stale local storage)')
+      return ''
     }
   }
   // Not authenticated, use local storage only
