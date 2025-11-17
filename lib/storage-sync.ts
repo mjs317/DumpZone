@@ -90,6 +90,9 @@ export async function saveCurrentDayContent(
 
     // Fallback path: API route (server-side Supabase with cookies)
     // This works even if client-side auth check failed, as server has access to cookies
+    // IMPORTANT: Don't send clientId when using API route, as it causes the real-time
+    // event to be filtered out on the same device. The API route should set clientId to null
+    // so the real-time event is received by all devices including the sender.
     try {
       const response = await fetch('/api/current-day', {
         method: 'POST',
@@ -100,13 +103,16 @@ export async function saveCurrentDayContent(
         cache: 'no-store',
         body: JSON.stringify({
           content,
-          clientId,
+          clientId: null, // Don't send clientId via API route to avoid self-filtering
           mutationId,
         }),
       })
 
       if (response.ok) {
         const data = await response.json()
+        console.log('✅ API route save successful:', { mutationId, updatedAt: data.updatedAt })
+        // Track this mutation ID so we can filter it out if needed
+        // But since clientId is null, the real-time event will be received by other devices
         return {
           updatedAt: data.updatedAt ?? null,
           mutationId,
@@ -116,7 +122,7 @@ export async function saveCurrentDayContent(
         console.log('Not authenticated, saving locally only')
       } else {
         const errorText = await response.text().catch(() => '')
-        console.error('Failed to sync via API route:', response.status, errorText)
+        console.error('❌ Failed to sync via API route:', response.status, errorText)
       }
     } catch (fetchError) {
       console.error('API route fetch failed:', fetchError)

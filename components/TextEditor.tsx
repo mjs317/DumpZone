@@ -81,19 +81,50 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
     if (user) {
       syncService.subscribeToCurrentDay(({ content: syncedContent, mutationId, clientId }) => {
         if (!editorRef.current) return;
+        
+        console.log('📡 Real-time event received:', { 
+          hasClientId: !!clientId, 
+          clientIdMatches: clientId === clientIdRef.current,
+          hasMutationId: !!mutationId,
+          mutationIdIgnored: mutationId ? ignoreMutationIdsRef.current.has(mutationId) : false,
+          contentLength: syncedContent.length
+        });
+        
         // Ignore echoes of our own writes to prevent caret jumps
+        // Only filter by clientId if it's set (client-side saves have clientId)
+        // API route saves have clientId: null, so we filter by mutationId instead
         if (clientId && clientIdRef.current && clientId === clientIdRef.current) {
+          // This is a client-side save from this device - ignore it
+          console.log('🚫 Ignoring own client-side save');
           if (mutationId) {
             ignoreMutationIdsRef.current.delete(mutationId);
           }
           return;
         }
+        
+        // Filter by mutationId for API route saves (clientId is null)
+        // If we saved this mutation via API route, we already have it locally
+        // But we still want to receive it to confirm it was saved, so we check if content matches
         if (mutationId && ignoreMutationIdsRef.current.has(mutationId)) {
+          // We sent this mutation - check if content matches to avoid unnecessary updates
+          if (syncedContent === editorRef.current.innerHTML) {
+            console.log('🚫 Ignoring own API route save (content matches)');
+            ignoreMutationIdsRef.current.delete(mutationId);
+            return; // Content already matches, no update needed
+          }
+          // Content differs - might be a conflict, apply the remote version
+          console.log('⚠️ Content conflict detected, applying remote version');
           ignoreMutationIdsRef.current.delete(mutationId);
+        }
+        
+        // Don't apply if content is identical
+        if (syncedContent === editorRef.current.innerHTML) {
+          console.log('🚫 Content identical, skipping update');
           return;
         }
-        if (syncedContent === editorRef.current.innerHTML) return;
+        
         // Apply any remote change that differs from current DOM
+        console.log('✅ Applying remote update');
         editorRef.current.innerHTML = syncedContent;
         setContent(syncedContent);
         updateCounts(syncedContent);
