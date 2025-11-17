@@ -77,6 +77,14 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
       
       if (editorRef.current) {
         editorRef.current.innerHTML = savedContent;
+        // Restore checkbox states after loading content
+        const checkboxes = editorRef.current.querySelectorAll('.dz-checkbox');
+        checkboxes.forEach((checkbox) => {
+          const input = checkbox as HTMLInputElement;
+          if (input.hasAttribute('checked')) {
+            input.checked = true;
+          }
+        });
         undoStackRef.current = [savedContent];
         // Initialize save time to prevent immediate overwrites
         const initTimestamp = Date.now();
@@ -203,6 +211,14 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
           contentLength: syncedContent.length
         });
         editorRef.current.innerHTML = syncedContent;
+        // Restore checkbox states after setting HTML
+        const checkboxes = editorRef.current.querySelectorAll('.dz-checkbox');
+        checkboxes.forEach((checkbox) => {
+          const input = checkbox as HTMLInputElement;
+          if (input.hasAttribute('checked')) {
+            input.checked = true;
+          }
+        });
         setContent(syncedContent);
         updateCounts(syncedContent);
         undoStackRef.current = [syncedContent];
@@ -364,53 +380,49 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
     const editor = editorRef.current;
     if (!editor) return;
 
-    const handleCheckboxClick = (event: MouseEvent) => {
+    const handleCheckboxInteraction = (event: MouseEvent | Event) => {
       const target = event.target as HTMLElement;
-      if (target && target.matches('.dz-checkbox')) {
-        event.preventDefault();
-        event.stopPropagation();
-        
-        const checkbox = target as HTMLInputElement;
-        // Manually toggle the checkbox
-        checkbox.checked = !checkbox.checked;
-        
-        // Update the checked attribute for persistence
-        if (checkbox.checked) {
-          checkbox.setAttribute('checked', 'checked');
-        } else {
-          checkbox.removeAttribute('checked');
-        }
-        
-        // Prevent cursor placement
-        const selection = window.getSelection();
-        if (selection) {
-          selection.removeAllRanges();
-        }
-        
-        handleInput();
+      if (!target) return;
+      
+      // Check if clicked element is a checkbox or inside a checkbox container
+      const checkbox = target.matches('.dz-checkbox') 
+        ? (target as HTMLInputElement)
+        : (target.closest('.dz-checklist-item')?.querySelector('.dz-checkbox') as HTMLInputElement);
+      
+      if (!checkbox) return;
+      
+      event.preventDefault();
+      event.stopPropagation();
+      
+      // Toggle the checkbox state
+      checkbox.checked = !checkbox.checked;
+      
+      // Update the checked attribute for persistence
+      if (checkbox.checked) {
+        checkbox.setAttribute('checked', 'checked');
+      } else {
+        checkbox.removeAttribute('checked');
       }
+      
+      // Prevent cursor placement
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+      }
+      
+      // Trigger save
+      handleInput();
     };
 
-    const handleCheckboxChange = (event: Event) => {
-      const target = event.target as HTMLElement;
-      if (target && target.matches('.dz-checkbox')) {
-        const checkbox = target as HTMLInputElement;
-        if (checkbox.checked) {
-          checkbox.setAttribute('checked', 'checked');
-        } else {
-          checkbox.removeAttribute('checked');
-        }
-        handleInput();
-      }
-    };
-
-    // Use mousedown instead of click to prevent cursor placement
-    editor.addEventListener('mousedown', handleCheckboxClick, true); // Use capture phase
-    editor.addEventListener('change', handleCheckboxChange);
+    // Handle both click and mousedown events for better compatibility
+    editor.addEventListener('click', handleCheckboxInteraction, true);
+    editor.addEventListener('mousedown', handleCheckboxInteraction, true);
+    editor.addEventListener('change', handleCheckboxInteraction, true);
     
     return () => {
-      editor.removeEventListener('mousedown', handleCheckboxClick, true);
-      editor.removeEventListener('change', handleCheckboxChange);
+      editor.removeEventListener('click', handleCheckboxInteraction, true);
+      editor.removeEventListener('mousedown', handleCheckboxInteraction, true);
+      editor.removeEventListener('change', handleCheckboxInteraction, true);
     };
   }, [handleInput]);
 
