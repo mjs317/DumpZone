@@ -384,12 +384,13 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
       const target = event.target as HTMLElement;
       if (!target) return;
       
-      // Check if clicked element is a checkbox or inside a checkbox container
-      const checkbox = target.matches('.dz-checkbox') 
-        ? (target as HTMLInputElement)
-        : (target.closest('.dz-checklist-item')?.querySelector('.dz-checkbox') as HTMLInputElement);
+      // ONLY handle if the clicked element is the checkbox itself
+      // Do NOT handle clicks on the text area (.dz-checklist-text)
+      if (!target.matches('.dz-checkbox')) {
+        return; // Allow normal editing behavior for text area
+      }
       
-      if (!checkbox) return;
+      const checkbox = target as HTMLInputElement;
       
       event.preventDefault();
       event.stopPropagation();
@@ -415,6 +416,7 @@ export default function TextEditor({ onContentChange, stickyOffset = 12 }: TextE
     };
 
     // Handle both click and mousedown events for better compatibility
+    // Only on the checkbox itself, not the text area
     editor.addEventListener('click', handleCheckboxInteraction, true);
     editor.addEventListener('mousedown', handleCheckboxInteraction, true);
     editor.addEventListener('change', handleCheckboxInteraction, true);
