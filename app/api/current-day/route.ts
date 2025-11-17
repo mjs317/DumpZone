@@ -13,7 +13,12 @@ export async function POST(request: Request) {
   }
 
   const { content, mutationId, clientId } = await request.json()
-  const dateKey = new Date().toISOString().split('T')[0]
+  // Use local timezone for date key (matching client-side logic)
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  const dateKey = `${year}-${month}-${day}`
   const updatedAt = new Date().toISOString()
 
   const { error } = await supabase

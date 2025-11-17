@@ -62,49 +62,64 @@ export async function saveCurrentDayContent(
   localStorage.saveCurrentDayContent(content)
 
   // Strategy:
-  // 1) Try client-side Supabase save (fast path; works when auth is ready on device)
-  // 2) Fallback to API route which uses server-side Supabase (works when client auth is flaky)
+  // 1) Ensure authentication state is checked and userId is cached
+  // 2) Try client-side Supabase save (fast path; works when auth is ready on device)
+  // 3) Fallback to API route which uses server-side Supabase (works when client auth is flaky)
   try {
     const clientId = getClientId()
     const mutationId = createMutationId()
 
-    // Fast path: client-side Supabase
-    try {
-      const direct = await syncService.saveCurrentDay(content, { clientId, mutationId })
-      if (direct && direct.updatedAt) {
-        return {
-          updatedAt: direct.updatedAt,
-          mutationId: direct.mutationId ?? mutationId,
+    // First, ensure we check auth and cache userId (important for mobile)
+    const isAuth = await isAuthenticated()
+    
+    // Fast path: client-side Supabase (only if authenticated)
+    if (isAuth) {
+      try {
+        const direct = await syncService.saveCurrentDay(content, { clientId, mutationId })
+        if (direct && direct.updatedAt) {
+          return {
+            updatedAt: direct.updatedAt,
+            mutationId: direct.mutationId ?? mutationId,
+          }
         }
+      } catch (e) {
+        console.warn('Client-side Supabase save failed, trying API route:', e)
+        // Continue to API fallback
       }
-    } catch (e) {
-      // continue to API fallback
     }
 
     // Fallback path: API route (server-side Supabase with cookies)
-    const response = await fetch('/api/current-day', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      cache: 'no-store',
-      body: JSON.stringify({
-        content,
-        clientId,
-        mutationId,
-      }),
-    })
+    // This works even if client-side auth check failed, as server has access to cookies
+    try {
+      const response = await fetch('/api/current-day', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        cache: 'no-store',
+        body: JSON.stringify({
+          content,
+          clientId,
+          mutationId,
+        }),
+      })
 
-    if (response.ok) {
-      const data = await response.json()
-      return {
-        updatedAt: data.updatedAt ?? null,
-        mutationId,
+      if (response.ok) {
+        const data = await response.json()
+        return {
+          updatedAt: data.updatedAt ?? null,
+          mutationId,
+        }
+      } else if (response.status === 401) {
+        // Not authenticated - this is expected for non-logged-in users
+        console.log('Not authenticated, saving locally only')
+      } else {
+        const errorText = await response.text().catch(() => '')
+        console.error('Failed to sync via API route:', response.status, errorText)
       }
-    } else {
-      const errorText = await response.text().catch(() => '')
-      console.error('Failed to sync via API route:', response.status, errorText)
+    } catch (fetchError) {
+      console.error('API route fetch failed:', fetchError)
     }
   } catch (error) {
     console.error('saveCurrentDayContent: sync failed, local only:', error)
