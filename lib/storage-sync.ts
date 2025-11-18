@@ -73,6 +73,29 @@ export async function getCurrentDayContent(): Promise<string> {
   return localStorage.getCurrentDayContent()
 }
 
+// Get content for a specific date (used for daily reset to get previous day's content)
+export async function getContentForDate(dateKey: string): Promise<string> {
+  console.log('📥 getContentForDate: Fetching content for date:', dateKey)
+  if (await isAuthenticated()) {
+    try {
+      const content = await syncService.loadDayForDate(dateKey)
+      console.log('✅ getContentForDate: Retrieved content for', dateKey, 'length:', content?.length || 0)
+      return content || ''
+    } catch (error) {
+      console.error('❌ getContentForDate: Error loading content for date:', dateKey, error)
+      return ''
+    }
+  }
+  // Not authenticated - check local storage
+  if (typeof window !== 'undefined') {
+    const storedDay = window.localStorage.getItem('dump-zone-current-day')
+    if (storedDay === dateKey) {
+      return window.localStorage.getItem('dump-zone-current-content') || ''
+    }
+  }
+  return ''
+}
+
 function createMutationId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID()

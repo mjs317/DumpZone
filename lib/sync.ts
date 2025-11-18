@@ -310,6 +310,61 @@ export class SyncService {
     return entry.content
   }
 
+  // Load content for a specific date (used for daily reset)
+  async loadDayForDate(dateKey: string): Promise<string> {
+    const supabase = getSupabaseClient()
+    if (!supabase) return ''
+    
+    const userId = await this.getUserId()
+    if (!userId) return ''
+
+    console.log('📥 loadDayForDate: Fetching content for user:', userId, 'date:', dateKey)
+    
+    // Get all entries for this user and find the one matching the date
+    const { data: allData, error: allError } = await supabase
+      .from('current_day')
+      .select('content, updated_at, client_id, mutation_id, date')
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false })
+    
+    if (allError) {
+      console.error('❌ Error loading entries for date:', allError)
+      return ''
+    }
+    
+    if (!allData || allData.length === 0) {
+      console.log('📭 No entries found for user:', userId)
+      return ''
+    }
+    
+    // Find the entry matching the requested date
+    const matchingEntry = allData.find((entry: any) => {
+      const entryDate = entry.date
+      if (!entryDate) return false
+      
+      // Normalize date to YYYY-MM-DD string format
+      let entryDateStr: string
+      if (typeof entryDate === 'string') {
+        entryDateStr = entryDate.split('T')[0]
+      } else if (entryDate instanceof Date) {
+        entryDateStr = entryDate.toISOString().split('T')[0]
+      } else {
+        entryDateStr = new Date(entryDate).toISOString().split('T')[0]
+      }
+      
+      return entryDateStr === dateKey
+    })
+    
+    if (matchingEntry) {
+      const content = matchingEntry.content || ''
+      console.log('✅ loadDayForDate: Found content for', dateKey, 'length:', content.length)
+      return content
+    }
+    
+    console.log('📭 loadDayForDate: No entry found for date:', dateKey)
+    return ''
+  }
+
   // Save current day content to Supabase
   async saveCurrentDay(
     content: string,
@@ -444,6 +499,68 @@ export class SyncService {
       .eq('date', dateKey)
 
     return !error
+  }
+
+  // Clear a specific date from current_day table (used for daily reset)
+  async clearCurrentDayForDate(dateKey: string): Promise<boolean> {
+    const supabase = getSupabaseClient()
+    if (!supabase) return false
+    
+    const userId = await this.getUserId()
+    if (!userId) return false
+
+    console.log('🗑️ clearCurrentDayForDate: Clearing date:', dateKey, 'for user:', userId)
+
+    // Get all entries and find the one matching the date (to avoid date format issues)
+    const { data: allData, error: fetchError } = await supabase
+      .from('current_day')
+      .select('id, date')
+      .eq('user_id', userId)
+    
+    if (fetchError) {
+      console.error('❌ Error fetching entries to clear:', fetchError)
+      return false
+    }
+    
+    if (!allData || allData.length === 0) {
+      console.log('📭 No entries found to clear')
+      return true
+    }
+    
+    // Find entry matching the date
+    const matchingEntry = allData.find((entry: any) => {
+      const entryDate = entry.date
+      if (!entryDate) return false
+      
+      let entryDateStr: string
+      if (typeof entryDate === 'string') {
+        entryDateStr = entryDate.split('T')[0]
+      } else if (entryDate instanceof Date) {
+        entryDateStr = entryDate.toISOString().split('T')[0]
+      } else {
+        entryDateStr = new Date(entryDate).toISOString().split('T')[0]
+      }
+      
+      return entryDateStr === dateKey
+    })
+    
+    if (matchingEntry) {
+      const { error } = await supabase
+        .from('current_day')
+        .delete()
+        .eq('id', matchingEntry.id)
+      
+      if (error) {
+        console.error('❌ Error deleting entry:', error)
+        return false
+      }
+      
+      console.log('✅ Successfully cleared entry for date:', dateKey)
+      return true
+    }
+    
+    console.log('📭 No entry found to clear for date:', dateKey)
+    return true
   }
 
   // Helper function - uses local timezone, not UTC
