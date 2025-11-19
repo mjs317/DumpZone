@@ -32,7 +32,31 @@ export default function GuidePage() {
 
         <div className="border dark:border-gray-700 rounded-lg p-4 sm:p-6 bg-white dark:bg-gray-800 shadow-sm text-base sm:text-lg leading-relaxed text-gray-800 dark:text-gray-100">
           <p className="mb-4">
-            Welcome to DumpZone, a place for you to dump your thoughts in real time! Everything within your Dump will sync between all your devices (if you are signed in) and every night at 12:00am will auto-archive so you start each day with a fresh Dump. Add text, photos, links, anything you want! Access your past Dumps by clicking the history button and/or connecting a dedicated Notion database. For any and all questions feel free to reach out! -{' '}
+            Welcome to DumpZone 💭🚽! The place to shamelessly dump whatever's in your brain, in real time.
+          </p>
+          
+          <p className="mb-4">
+            Fire in text, photos, links, half-baked ideas, genius shower thoughts, whatever. As long as you're signed in, your Dump stays synced across all your devices.
+          </p>
+          
+          <p className="mb-4">
+            Then like magic, every night at 12:00 AM, today's Dump auto-archives so you wake up to a fresh, empty Dump ready for a brand-new chaos session.
+          </p>
+          
+          <p className="mb-4">
+            Want to revisit old brilliance? Hit the History button or hook up a dedicated Notion database to store and organize all your past Dumps.
+          </p>
+          
+          <p className="mb-4">
+            Questions, bug reports, feature ideas?
+          </p>
+          
+          <p className="mb-4">
+            Drop me a line anytime.
+          </p>
+          
+          <p>
+            –{' '}
             <a href="https://solimini.xyz" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-300 underline">
               MJS
             </a>
