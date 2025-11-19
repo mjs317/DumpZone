@@ -16,6 +16,7 @@ export default function HistoryPage() {
   const [allTags, setAllTags] = useState<string[]>([]);
   const [filterTag, setFilterTag] = useState<string | null>(null);
   const [showPinnedOnly, setShowPinnedOnly] = useState(false);
+  const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadEntries();
@@ -103,6 +104,20 @@ export default function HistoryPage() {
     }
   };
 
+  const toggleExpand = (entryId: string) => {
+    setExpandedEntries(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(entryId)) {
+        newSet.delete(entryId);
+      } else {
+        newSet.add(entryId);
+      }
+      return newSet;
+    });
+  };
+
+  const isExpanded = (entryId: string) => expandedEntries.has(entryId);
+
   return (
     <main className="min-h-screen bg-white dark:bg-gray-900 w-full transition-colors">
       <div className="max-w-4xl mx-auto px-2 sm:px-4 md:px-6 lg:px-0 py-4 sm:py-6 md:py-8 w-full">
@@ -174,117 +189,163 @@ export default function HistoryPage() {
           </div>
         ) : (
           <div className="space-y-4 sm:space-y-6">
-            {entries.map((entry) => (
-              <div
-                key={entry.id}
-                className="border dark:border-gray-700 rounded-lg p-3 sm:p-4 md:p-6 shadow-sm bg-white dark:bg-gray-800"
-              >
-                <div className="flex justify-between items-start mb-2 sm:mb-3">
-                  <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                    {new Date(entry.date).toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleTogglePin(entry.id)}
-                      className={`text-lg ${entry.pinned ? 'text-yellow-500' : 'text-gray-400 dark:text-gray-600'}`}
-                      title={entry.pinned ? 'Unpin' : 'Pin'}
-                    >
-                      📌
-                    </button>
-                    <div className="relative">
-                      <button
-                        onClick={() => setEditingTags(editingTags === entry.id ? null : entry.id)}
-                        className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-                      >
-                        🏷️
-                      </button>
-                      {editingTags === entry.id && (
-                        <div className="absolute right-0 mt-2 p-3 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded shadow-lg z-10 min-w-[200px]">
+            {entries.map((entry) => {
+              const expanded = isExpanded(entry.id);
+              // Get preview text (first 150 characters, stripped of HTML)
+              const previewText = entry.content
+                ? entry.content.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().substring(0, 150)
+                : '';
+              const hasMoreContent = entry.content && entry.content.replace(/<[^>]*>/g, '').trim().length > 150;
+              
+              return (
+                <div
+                  key={entry.id}
+                  className="border dark:border-gray-700 rounded-lg shadow-sm bg-white dark:bg-gray-800"
+                >
+                  {/* Header - Always visible */}
+                  <div 
+                    className="p-3 sm:p-4 md:p-6 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    onClick={() => toggleExpand(entry.id)}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
+                          {new Date(entry.date).toLocaleDateString('en-US', {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                          })}
+                        </div>
+                        {entry.tags && entry.tags.length > 0 && (
                           <div className="flex flex-wrap gap-1 mb-2">
-                            {entry.tags && entry.tags.map(tag => (
+                            {entry.tags.map(tag => (
                               <span
                                 key={tag}
-                                className="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded flex items-center gap-1"
+                                className="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded"
                               >
                                 #{tag}
-                                <button
-                                  onClick={() => handleRemoveTag(entry.id, tag)}
-                                  className="hover:text-red-600"
-                                >
-                                  ×
-                                </button>
                               </span>
                             ))}
                           </div>
-                          <div className="flex gap-1">
-                            <input
-                              type="text"
-                              value={newTag}
-                              onChange={(e) => setNewTag(e.target.value)}
-                              onKeyPress={(e) => {
-                                if (e.key === 'Enter') {
-                                  handleAddTag(entry.id, newTag);
-                                }
-                              }}
-                              placeholder="Add tag..."
-                              className="flex-1 px-2 py-1 text-xs border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"
-                            />
+                        )}
+                        {!expanded && (
+                          <div className="text-sm text-gray-600 dark:text-gray-300 mt-2 line-clamp-2">
+                            {previewText}
+                            {hasMoreContent && '...'}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-2 ml-4 flex-shrink-0">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTogglePin(entry.id);
+                          }}
+                          className={`text-lg ${entry.pinned ? 'text-yellow-500' : 'text-gray-400 dark:text-gray-600'}`}
+                          title={entry.pinned ? 'Unpin' : 'Pin'}
+                        >
+                          📌
+                        </button>
+                        <div className="relative">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingTags(editingTags === entry.id ? null : entry.id);
+                            }}
+                            className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                          >
+                            🏷️
+                          </button>
+                          {editingTags === entry.id && (
+                            <div className="absolute right-0 mt-2 p-3 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded shadow-lg z-10 min-w-[200px]">
+                              <div className="flex flex-wrap gap-1 mb-2">
+                                {entry.tags && entry.tags.map(tag => (
+                                  <span
+                                    key={tag}
+                                    className="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded flex items-center gap-1"
+                                  >
+                                    #{tag}
+                                    <button
+                                      onClick={() => handleRemoveTag(entry.id, tag)}
+                                      className="hover:text-red-600"
+                                    >
+                                      ×
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                              <div className="flex gap-1">
+                                <input
+                                  type="text"
+                                  value={newTag}
+                                  onChange={(e) => setNewTag(e.target.value)}
+                                  onKeyPress={(e) => {
+                                    if (e.key === 'Enter') {
+                                      handleAddTag(entry.id, newTag);
+                                    }
+                                  }}
+                                  placeholder="Add tag..."
+                                  className="flex-1 px-2 py-1 text-xs border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"
+                                />
+                                <button
+                                  onClick={() => handleAddTag(entry.id, newTag)}
+                                  className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                                >
+                                  Add
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div className="relative group">
+                          <button 
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                          >
+                            ⬇️
+                          </button>
+                          <div className="absolute right-0 mt-2 p-2 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded shadow-lg z-10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
                             <button
-                              onClick={() => handleAddTag(entry.id, newTag)}
-                              className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                              onClick={() => handleExport(entry, 'markdown')}
+                              className="block w-full text-left px-2 py-1 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded whitespace-nowrap"
                             >
-                              Add
+                              Export as Markdown
+                            </button>
+                            <button
+                              onClick={() => handleExport(entry, 'text')}
+                              className="block w-full text-left px-2 py-1 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded whitespace-nowrap"
+                            >
+                              Export as Text
                             </button>
                           </div>
                         </div>
-                      )}
-                    </div>
-                    <div className="relative group">
-                      <button className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
-                        ⬇️
-                      </button>
-                      <div className="absolute right-0 mt-2 p-2 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded shadow-lg z-10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
                         <button
-                          onClick={() => handleExport(entry, 'markdown')}
-                          className="block w-full text-left px-2 py-1 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded whitespace-nowrap"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleExpand(entry.id);
+                          }}
+                          className="text-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-transform"
+                          title={expanded ? 'Collapse' : 'Expand'}
                         >
-                          Export as Markdown
-                        </button>
-                        <button
-                          onClick={() => handleExport(entry, 'text')}
-                          className="block w-full text-left px-2 py-1 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded whitespace-nowrap"
-                        >
-                          Export as Text
+                          {expanded ? '▼' : '▶'}
                         </button>
                       </div>
                     </div>
                   </div>
+                  
+                  {/* Content - Only visible when expanded */}
+                  {expanded && (
+                    <div className="px-3 sm:px-4 md:px-6 pb-3 sm:pb-4 md:pb-6 border-t dark:border-gray-700">
+                      <div
+                        className="prose prose-sm sm:prose max-w-none text-sm sm:text-base dark:prose-invert mt-4"
+                        dangerouslySetInnerHTML={{ __html: entry.content }}
+                      />
+                    </div>
+                  )}
                 </div>
-                
-                {entry.tags && entry.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {entry.tags.map(tag => (
-                      <span
-                        key={tag}
-                        className="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded"
-                      >
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                
-                <div
-                  className="prose prose-sm sm:prose max-w-none text-sm sm:text-base dark:prose-invert"
-                  dangerouslySetInnerHTML={{ __html: entry.content }}
-                />
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

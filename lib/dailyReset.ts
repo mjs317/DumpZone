@@ -107,7 +107,26 @@ export async function checkAndReset(onReset?: () => void): Promise<void> {
     
     // CRITICAL FIX: Get content for the PREVIOUS date from database, not current date
     // getCurrentDayContent() would return today's (empty) content, not yesterday's
-    const previousContent = await getContentForDate(previousDate);
+    // Also try to get content from current_day table as a backup (in case it wasn't cleared yet)
+    let previousContent = await getContentForDate(previousDate);
+    
+    // If we didn't find content, try getting it from current_day table directly
+    // This is a safeguard to ensure we don't lose content
+    if (!previousContent || !previousContent.trim()) {
+      console.log('⚠️ No content found via getContentForDate, trying current_day table directly...');
+      const { getCurrentDayContent } = await import('./storage-sync');
+      // Check if the stored day matches previousDate
+      if (typeof window !== 'undefined') {
+        const storedDay = window.localStorage.getItem('dump-zone-current-day');
+        if (storedDay === previousDate) {
+          const currentDayContent = await getCurrentDayContent();
+          if (currentDayContent && currentDayContent.trim()) {
+            console.log('✅ Found content in current_day storage, using it');
+            previousContent = currentDayContent;
+          }
+        }
+      }
+    }
     
     console.log('📥 Daily reset: Retrieved previous day content, length:', previousContent?.length || 0);
     
