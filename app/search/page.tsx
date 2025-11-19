@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Logo from '@/components/Logo';
 import ThemeToggle from '@/components/ThemeToggle';
-import { getHistory, DumpEntry } from '@/lib/storage';
+import { getHistory, getAllTags, DumpEntry } from '@/lib/storage-sync';
 import { searchInContent } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -17,17 +17,46 @@ export default function SearchPage() {
   const [allTags, setAllTags] = useState<string[]>([]);
 
   useEffect(() => {
-    const history = getHistory().reverse();
-    setEntries(history);
+    const loadData = async () => {
+      const history = await getHistory();
+      
+      // Sort by date descending (most recent first)
+      const sortedHistory = history.sort((a, b) => {
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        if (dateA === dateB) {
+          return (b.timestamp || 0) - (a.timestamp || 0);
+        }
+        return dateB - dateA; // Most recent first
+      });
+      
+      setEntries(sortedHistory);
+      
+      // Get all tags
+      const tags = await getAllTags();
+      setAllTags(tags);
+    };
     
-    // Get all tags
-    const tags = new Set<string>();
-    history.forEach(entry => {
-      if (entry.tags) {
-        entry.tags.forEach(tag => tags.add(tag));
+    loadData();
+    
+    // Refresh data when page becomes visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadData();
       }
-    });
-    setAllTags(Array.from(tags).sort());
+    };
+    
+    // Refresh every 30 seconds to catch updates
+    const interval = setInterval(() => {
+      loadData();
+    }, 30000);
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {
