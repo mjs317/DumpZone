@@ -408,10 +408,12 @@ export class SyncService {
     const userId = await this.getUserId()
     if (!userId) return []
 
+    // Order by date descending (most recent first), then timestamp as tiebreaker
     const { data, error } = await supabase
       .from('dump_entries')
       .select('*')
       .eq('user_id', userId)
+      .order('date', { ascending: false })
       .order('timestamp', { ascending: false })
 
     if (error || !data) return []

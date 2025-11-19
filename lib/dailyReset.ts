@@ -2,7 +2,20 @@ import { getCurrentDateKey } from './storage';
 import { saveToHistory, clearCurrentDay, getContentForDate } from './storage-sync';
 import { saveToNotion, isNotionConnected } from './notion';
 
-let lastCheckedDate: string | null = null;
+const LAST_CHECKED_DATE_KEY = 'dump-zone-last-checked-date';
+
+// Get last checked date from localStorage (persists across page reloads)
+function getLastCheckedDate(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(LAST_CHECKED_DATE_KEY);
+}
+
+// Set last checked date in localStorage
+function setLastCheckedDate(date: string): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(LAST_CHECKED_DATE_KEY, date);
+}
+
 let resetInterval: NodeJS.Timeout | null = null;
 
 export function initializeDailyReset(onReset?: () => void): void {
@@ -23,15 +36,22 @@ export function initializeDailyReset(onReset?: () => void): void {
 
 export async function checkAndReset(onReset?: () => void): Promise<void> {
   const currentDate = getCurrentDateKey();
+  let lastCheckedDate = getLastCheckedDate();
+  
+  console.log('🕐 Daily reset check:', { currentDate, lastCheckedDate });
   
   // CRITICAL FIX: If lastCheckedDate is null (first load), check if we need to process yesterday
   // This handles the case where user opens app on a new day after not having it open at midnight
   if (lastCheckedDate === null) {
+    console.log('📅 First load - checking for unarchived content from previous days...');
+    
     // Check if there's content in the database for yesterday that needs to be archived
     // Get yesterday's date
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+    
+    console.log('🔍 Checking for unarchived content from:', yesterdayKey);
     
     // Try to get yesterday's content from database
     const yesterdayContent = await getContentForDate(yesterdayKey);
@@ -50,11 +70,17 @@ export async function checkAndReset(onReset?: () => void): Promise<void> {
       // Save to Notion if connected
       if (isNotionConnected()) {
         try {
-          await saveToNotion(yesterdayContent, yesterdayKey);
-          console.log('✅ Successfully saved yesterday to Notion:', yesterdayKey);
+          const notionResult = await saveToNotion(yesterdayContent, yesterdayKey);
+          if (notionResult) {
+            console.log('✅ Successfully saved yesterday to Notion:', yesterdayKey);
+          } else {
+            console.error('❌ Failed to save to Notion (returned false)');
+          }
         } catch (error) {
           console.error('❌ Failed to save yesterday to Notion:', error);
         }
+      } else {
+        console.log('ℹ️ Notion not connected, skipping Notion save');
       }
       
       // Clear yesterday's entry from current_day table (it's now in history)
@@ -64,10 +90,12 @@ export async function checkAndReset(onReset?: () => void): Promise<void> {
       } catch (error) {
         console.error('❌ Failed to clear yesterday:', error);
       }
+    } else {
+      console.log('📭 No unarchived content found for:', yesterdayKey);
     }
     
     // Set lastCheckedDate to current date
-    lastCheckedDate = currentDate;
+    setLastCheckedDate(currentDate);
     return;
   }
   
@@ -75,7 +103,7 @@ export async function checkAndReset(onReset?: () => void): Promise<void> {
   if (lastCheckedDate !== currentDate) {
     const previousDate = lastCheckedDate;
     
-    console.log('🔄 Daily reset triggered:', { previousDate, currentDate });
+    console.log('🔄 Daily reset triggered - date changed!', { previousDate, currentDate });
     
     // CRITICAL FIX: Get content for the PREVIOUS date from database, not current date
     // getCurrentDayContent() would return today's (empty) content, not yesterday's
@@ -95,11 +123,18 @@ export async function checkAndReset(onReset?: () => void): Promise<void> {
       // Also save to Notion if connected
       if (isNotionConnected()) {
         try {
-          await saveToNotion(previousContent, previousDate);
-          console.log('✅ Successfully saved to Notion:', previousDate);
+          console.log('📝 Attempting to save to Notion for date:', previousDate);
+          const notionResult = await saveToNotion(previousContent, previousDate);
+          if (notionResult) {
+            console.log('✅ Successfully saved to Notion:', previousDate);
+          } else {
+            console.error('❌ Failed to save to Notion (returned false) for date:', previousDate);
+          }
         } catch (error) {
-          console.error('❌ Failed to save to Notion:', error);
+          console.error('❌ Failed to save to Notion (error thrown):', error);
         }
+      } else {
+        console.log('ℹ️ Notion not connected, skipping Notion save');
       }
     } else {
       console.log('📭 No content to save for:', previousDate);
@@ -121,13 +156,15 @@ export async function checkAndReset(onReset?: () => void): Promise<void> {
       console.error('❌ Failed to clear current day:', error);
     }
     
-    // Update last checked date
-    lastCheckedDate = currentDate;
+    // Update last checked date in localStorage
+    setLastCheckedDate(currentDate);
     
     // Call reset callback
     if (onReset) {
       onReset();
     }
+  } else {
+    console.log('✓ Date unchanged, no reset needed');
   }
 }
 

@@ -43,11 +43,16 @@ function htmlToText(html: string): string {
 }
 
 export async function saveToNotion(content: string, date: string): Promise<boolean> {
+  console.log('📝 saveToNotion: Starting save for date:', date, 'content length:', content.length);
+  
   const config = getNotionConfig();
   
   if (!config.token || !config.databaseId) {
+    console.error('❌ saveToNotion: Notion not configured - token:', !!config.token, 'databaseId:', !!config.databaseId);
     return false;
   }
+  
+  console.log('✅ saveToNotion: Notion configured, initializing client...');
   
   if (!notionClient) {
     notionClient = new Client({ auth: config.token });
@@ -57,11 +62,15 @@ export async function saveToNotion(content: string, date: string): Promise<boole
   const textContent = htmlToText(content);
   
   if (!textContent.trim()) {
+    console.log('⚠️ saveToNotion: Content is empty after HTML conversion, skipping');
     return false; // Don't save empty content
   }
   
+  console.log('📝 saveToNotion: Converted HTML to text, length:', textContent.length);
+  
   try {
-    await notionClient.pages.create({
+    console.log('📤 saveToNotion: Creating Notion page...');
+    const result = await notionClient.pages.create({
       parent: {
         database_id: config.databaseId,
       },
@@ -99,9 +108,15 @@ export async function saveToNotion(content: string, date: string): Promise<boole
       ],
     });
     
+    console.log('✅ saveToNotion: Successfully created Notion page:', result.id);
     return true;
-  } catch (error) {
-    console.error('Failed to save to Notion:', error);
+  } catch (error: any) {
+    console.error('❌ saveToNotion: Failed to save to Notion:', error);
+    console.error('❌ saveToNotion: Error details:', {
+      message: error?.message,
+      code: error?.code,
+      status: error?.status,
+    });
     return false;
   }
 }

@@ -50,7 +50,18 @@ export default function HistoryPage() {
 
   const loadEntries = async () => {
     let history = await getHistory();
-    history = history.reverse();
+    
+    // Sort by date descending (most recent first) - ensure proper sorting
+    history = history.sort((a, b) => {
+      // Parse dates and compare
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      // If dates are equal, use timestamp as tiebreaker
+      if (dateA === dateB) {
+        return (b.timestamp || 0) - (a.timestamp || 0);
+      }
+      return dateB - dateA; // Most recent first
+    });
     
     if (showPinnedOnly) {
       history = history.filter(e => e.pinned);
