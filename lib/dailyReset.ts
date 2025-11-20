@@ -101,11 +101,20 @@ export async function checkAndReset(onReset?: () => void): Promise<void> {
   
   // If date changed (it's a new day)
   if (lastCheckedDate !== currentDate) {
-    const previousDate = lastCheckedDate;
+    // CRITICAL FIX: Calculate yesterday's date from currentDate, not from lastCheckedDate
+    // This ensures we always use the correct date (yesterday = currentDate - 1 day)
+    // Using lastCheckedDate could be stale or incorrect if there were timing issues
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const previousDate = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
     
-    console.log('🔄 Daily reset triggered - date changed!', { previousDate, currentDate });
+    console.log('🔄 Daily reset triggered - date changed!', { 
+      lastCheckedDate, 
+      currentDate, 
+      calculatedPreviousDate: previousDate 
+    });
     
-    // CRITICAL FIX: Get content for the PREVIOUS date from database, not current date
+    // CRITICAL FIX: Get content for the PREVIOUS date (yesterday) from database
     // getCurrentDayContent() would return today's (empty) content, not yesterday's
     // Also try to get content from current_day table as a backup (in case it wasn't cleared yet)
     let previousContent = await getContentForDate(previousDate);
@@ -128,13 +137,14 @@ export async function checkAndReset(onReset?: () => void): Promise<void> {
       }
     }
     
-    console.log('📥 Daily reset: Retrieved previous day content, length:', previousContent?.length || 0);
+    console.log('📥 Daily reset: Retrieved previous day content for date:', previousDate, 'length:', previousContent?.length || 0);
     
     // Save previous day's content to history if it exists
+    // Use the calculated previousDate (yesterday) to ensure correct date
     if (previousContent && previousContent.trim()) {
       try {
         await saveToHistory(previousContent, previousDate);
-        console.log('✅ Successfully saved to history:', previousDate);
+        console.log('✅ Successfully saved to history with date:', previousDate);
       } catch (error) {
         console.error('❌ Failed to save to history:', error);
       }
