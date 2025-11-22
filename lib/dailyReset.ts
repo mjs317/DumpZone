@@ -101,81 +101,37 @@ export async function checkAndReset(onReset?: () => void): Promise<void> {
   
   // If date changed (it's a new day)
   if (lastCheckedDate !== currentDate) {
+    // CRITICAL FIX: Calculate yesterday's date from currentDate, not from lastCheckedDate
+    // This ensures we always use the correct date (yesterday = currentDate - 1 day)
+    // Using lastCheckedDate could be stale or incorrect if there were timing issues
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const previousDate = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+    
     console.log('🔄 Daily reset triggered - date changed!', { 
       lastCheckedDate, 
-      currentDate
+      currentDate, 
+      calculatedPreviousDate: previousDate 
     });
     
-    // CRITICAL FIX: Get the actual date from the database entry, not calculate it
-    // The content in current_day table has a date field that tells us what day it's for
-    // We need to get the most recent entry and use its date field
-    let previousContent = '';
-    let previousDate = '';
+    // CRITICAL FIX: Get content for the PREVIOUS date (yesterday) from database
+    // getCurrentDayContent() would return today's (empty) content, not yesterday's
+    // Also try to get content from current_day table as a backup (in case it wasn't cleared yet)
+    let previousContent = await getContentForDate(previousDate);
     
-    // First, try to get content and date from the most recent entry in current_day table
-    // This ensures we use the actual date stored in the database, not a calculated date
-    try {
-      const { syncService } = await import('./sync');
-      if (syncService.hasUser()) {
-        // Get the most recent entry from current_day table to get the actual date
-        const supabase = await import('./supabase/client').then(m => m.createClient());
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        if (user) {
-          const { data: entries } = await supabase
-            .from('current_day')
-            .select('content, date')
-            .eq('user_id', user.id)
-            .order('updated_at', { ascending: false })
-            .limit(1);
-          
-          if (entries && entries.length > 0) {
-            const entry = entries[0];
-            previousContent = entry.content || '';
-            // Get the date from the entry and normalize it
-            const entryDate = entry.date;
-            if (entryDate) {
-              let entryDateStr: string;
-              if (typeof entryDate === 'string') {
-                entryDateStr = entryDate.split('T')[0];
-              } else if (entryDate instanceof Date) {
-                entryDateStr = entryDate.toISOString().split('T')[0];
-              } else {
-                entryDateStr = new Date(entryDate).toISOString().split('T')[0];
-              }
-              previousDate = entryDateStr;
-              console.log('📥 Daily reset: Found entry in current_day with date:', previousDate, 'content length:', previousContent.length);
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('⚠️ Error getting date from database entry:', error);
-    }
-    
-    // Fallback: If we didn't get a date from the database, calculate yesterday's date
-    // But also try to get content from current_day storage as backup
-    if (!previousDate) {
-      console.log('⚠️ No date from database entry, calculating yesterday...');
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      previousDate = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
-      
-      // Try to get content for the calculated date
-      previousContent = await getContentForDate(previousDate);
-      
-      // If still no content, try getting it from current_day storage
-      if (!previousContent || !previousContent.trim()) {
-        console.log('⚠️ No content found via getContentForDate, trying current_day storage...');
-        const { getCurrentDayContent } = await import('./storage-sync');
-        if (typeof window !== 'undefined') {
-          const storedDay = window.localStorage.getItem('dump-zone-current-day');
-          if (storedDay === previousDate) {
-            const currentDayContent = await getCurrentDayContent();
-            if (currentDayContent && currentDayContent.trim()) {
-              console.log('✅ Found content in current_day storage, using it');
-              previousContent = currentDayContent;
-            }
+    // If we didn't find content, try getting it from current_day table directly
+    // This is a safeguard to ensure we don't lose content
+    if (!previousContent || !previousContent.trim()) {
+      console.log('⚠️ No content found via getContentForDate, trying current_day table directly...');
+      const { getCurrentDayContent } = await import('./storage-sync');
+      // Check if the stored day matches previousDate
+      if (typeof window !== 'undefined') {
+        const storedDay = window.localStorage.getItem('dump-zone-current-day');
+        if (storedDay === previousDate) {
+          const currentDayContent = await getCurrentDayContent();
+          if (currentDayContent && currentDayContent.trim()) {
+            console.log('✅ Found content in current_day storage, using it');
+            previousContent = currentDayContent;
           }
         }
       }
@@ -184,8 +140,8 @@ export async function checkAndReset(onReset?: () => void): Promise<void> {
     console.log('📥 Daily reset: Retrieved previous day content for date:', previousDate, 'length:', previousContent?.length || 0);
     
     // Save previous day's content to history if it exists
-    // Use the date from the database entry (or calculated fallback) to ensure correct date
-    if (previousContent && previousContent.trim() && previousDate) {
+    // Use the calculated previousDate (yesterday) to ensure correct date
+    if (previousContent && previousContent.trim()) {
       try {
         await saveToHistory(previousContent, previousDate);
         console.log('✅ Successfully saved to history with date:', previousDate);
@@ -210,17 +166,15 @@ export async function checkAndReset(onReset?: () => void): Promise<void> {
         console.log('ℹ️ Notion not connected, skipping Notion save');
       }
     } else {
-      console.log('📭 No content to save for:', previousDate || 'unknown date');
+      console.log('📭 No content to save for:', previousDate);
     }
     
     // Clear previous day's entry from current_day table (it's now archived)
-    if (previousDate) {
-      try {
-        await clearCurrentDayForDate(previousDate);
-        console.log('✅ Cleared previous day from current_day table');
-      } catch (error) {
-        console.error('❌ Failed to clear previous day:', error);
-      }
+    try {
+      await clearCurrentDayForDate(previousDate);
+      console.log('✅ Cleared previous day from current_day table');
+    } catch (error) {
+      console.error('❌ Failed to clear previous day:', error);
     }
     
     // Clear current day (today) - both local and remote
